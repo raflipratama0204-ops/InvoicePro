@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InvoicePro - Pembuat Invoice Penjualan & Ekspor PDF</title>
+  
+  <!-- Tailwind CSS (Local & CDN Fallback) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Custom Stylesheet & Print A4 Rules -->
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800" data-theme="dark">
+
+  <!-- Top App Navigation Bar -->
+  <header id="app-header" class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm no-print">
+    <div class="max-w-[1700px] mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 font-extrabold text-lg">
+          🧾
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold text-slate-900 leading-tight">InvoicePro</h1>
+            <span class="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full border border-blue-200">v1.0</span>
+          </div>
+          <p class="text-xs text-slate-500">Pembuat Invoice Penjualan Siap Cetak & PDF</p>
+        </div>
+      </div>
+
+      <!-- Main Navigation Tabs: Buat Invoice vs Katalog Barang vs Data Penjualan -->
+      <nav class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1">
+        <button id="nav-tab-builder" class="px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all bg-white text-blue-600 shadow-sm flex items-center gap-1.5">
+          <span>🧾</span> Buat Invoice
+        </button>
+        <button id="nav-tab-catalog" class="px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
+          <span>📦</span> Katalog Barang
+          <span id="catalog-badge-count" class="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
+        </button>
+        <button id="nav-tab-sales" class="px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
+          <span>📊</span> Data Penjualan
+          <span id="sales-badge-count" class="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0.2 rounded-full font-bold">0</span>
+        </button>
+      </nav>
+
+      <!-- Mobile Tab Toggle (Hidden on large screens, only in builder view) -->
+      <div id="mobile-builder-toggle" class="flex lg:hidden bg-slate-100 p-1 rounded-lg border border-slate-200">
+        <button id="tab-btn-form" class="px-3 py-1 text-xs font-semibold rounded-md bg-white text-blue-600 shadow-sm">
+          Form Input
+        </button>
+        <button id="tab-btn-preview" class="px-3 py-1 text-xs font-semibold rounded-md text-slate-600">
+          Preview Invoice
+        </button>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center flex-wrap gap-2">
+        <button id="btn-new-invoice" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200">
+          <span>+</span> Buat Baru
+        </button>
+        
+        <button id="btn-save-invoice" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200">
+          <span>💾</span> Simpan
+        </button>
+
+        <button id="btn-open-history" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200">
+          <span>📂</span> Riwayat
+        </button>
+
+        <button id="btn-print" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 border border-slate-200">
+          <span>🖨️</span> Cetak A4
+        </button>
+
+        <button id="btn-download-pdf" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/25 transition flex items-center gap-1.5">
+          <span>📥</span> Download PDF
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-[1700px] mx-auto p-4">
+
+    <!-- VIEW 1: Pembuat Invoice (Dual Split Screen) -->
+    <div id="view-invoice-builder" class="flex flex-col lg:flex-row gap-6 w-full">
+
+    <!-- LEFT COLUMN: Input Form -->
+    <div id="form-container" class="w-full lg:w-[48%] xl:w-[45%] flex flex-col gap-4 no-print">
+
+      <!-- Card 0: Tema & Warna Invoice -->
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🎨</span>
+            <span class="text-sm font-bold text-slate-800">Tema & Warna Invoice</span>
+          </div>
+          <select id="input-theme" class="text-xs border border-slate-300 rounded-md px-3 py-1.5 font-medium bg-slate-50 focus:outline-blue-500">
+            <option value="dark" selected>Slate Monokrom (Default)</option>
+            <option value="blue">Biru Modern</option>
+            <option value="emerald">Hijau Zamrud</option>
+            <option value="navy">Navy Korporat</option>
+            <option value="purple">Ungu Premium</option>
+            <option value="crimson">Merah Crimson</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Card 1: Informasi Toko / Penjual -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+          <h2 class="form-section-title mb-0 border-b-0 pb-0">
+            <span>🏢</span> Identitas Usaha / Penjual
+          </h2>
+          <button type="button" id="btn-save-default-store" class="text-[11px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded border border-blue-200 transition">
+            ★ Jadikan Toko Default
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label class="form-label">Nama Usaha / Toko / PT *</label>
+            <input type="text" id="input-store-name" class="form-input font-bold" placeholder="Contoh: PT. Sumber Rezeki">
+          </div>
+          <div>
+            <label class="form-label">Slogan / Tagline</label>
+            <input type="text" id="input-store-tagline" class="form-input" placeholder="Contoh: Grosir & Retail Elektronik">
+          </div>
+        </div>
+
+        <!-- Logo Upload -->
+        <div class="mb-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+          <label class="form-label">Logo Usaha (Maks. 2MB)</label>
+          <div class="flex items-center gap-3">
+            <input type="file" id="input-store-logo" accept="image/*" class="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            <div id="logo-preview-container" class="hidden flex items-center gap-2">
+              <img id="logo-preview-img" src="" alt="Logo Preview" class="h-8 max-w-[80px] object-contain border rounded bg-white p-0.5">
+              <button type="button" id="btn-remove-logo" class="text-xs text-red-500 hover:text-red-700">Hapus</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label class="form-label">No. Telepon / WhatsApp</label>
+            <input type="text" id="input-store-phone" class="form-input" placeholder="+62 812-xxxx-xxxx">
+          </div>
+          <div>
+            <label class="form-label">Email Usaha</label>
+            <input type="email" id="input-store-email" class="form-input" placeholder="kontak@tokoanda.com">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label class="form-label">Alamat Lengkap Usaha</label>
+            <textarea id="input-store-address" rows="2" class="form-input" placeholder="Jl. Nama Jalan No. XX, Kota, Provinsi, Kode Pos"></textarea>
+          </div>
+          <div>
+            <label class="form-label">NPWP / NIB (Opsional)</label>
+            <input type="text" id="input-store-npwp" class="form-input" placeholder="00.000.000.0-000.000">
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Detail Faktur & Pelanggan -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="form-section-title">
+          <span>📑</span> Informasi Invoice & Pelanggan
+        </h2>
+
+        <!-- Invoice Meta -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+          <div>
+            <label class="form-label">Nomor Invoice *</label>
+            <div class="flex gap-1">
+              <input type="text" id="input-invoice-number" class="form-input font-mono font-bold text-xs" placeholder="INV/2026/001">
+              <button type="button" id="btn-generate-no" class="px-2 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 text-xs font-semibold cursor-pointer" title="Buat nomor baru acak">🎲</button>
+            </div>
+            <p id="invoice-no-error" class="hidden text-[11px] font-bold text-rose-600 mt-1 flex items-center gap-1">
+              <span>⚠️</span> <span>Nomor invoice sudah digunakan! Gunakan nomor lain.</span>
+            </p>
+          </div>
+          <div>
+            <label class="form-label">Tanggal Terbit *</label>
+            <input type="date" id="input-date" class="form-input text-xs">
+          </div>
+          <div>
+            <label class="form-label">Jatuh Tempo *</label>
+            <input type="date" id="input-due-date" class="form-input text-xs">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div>
+            <label class="form-label">Status Pembayaran</label>
+            <select id="input-status" class="form-input font-bold text-xs">
+              <option value="LUNAS">LUNAS (Paid)</option>
+              <option value="BELUM LUNAS">BELUM LUNAS (Unpaid)</option>
+              <option value="JATUH TEMPO">JATUH TEMPO (Overdue)</option>
+              <option value="DP">UANG MUKA / DP (Partially Paid)</option>
+            </select>
+          </div>
+          <div id="dp-input-container" class="hidden">
+            <label class="form-label">Jumlah DP Terbayar (Rp)</label>
+            <input type="text" inputmode="numeric" id="input-down-payment" class="form-input text-xs font-mono" placeholder="0" value="0">
+          </div>
+        </div>
+
+        <!-- Client Info -->
+        <div class="border-t border-slate-100 pt-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+            <div class="text-xs font-bold text-slate-500 uppercase tracking-wide">Ditujukan Kepada (Customer):</div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <select id="select-saved-client" class="text-xs bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-100 transition focus:ring-1 focus:ring-blue-500 max-w-[200px] truncate" title="Pilih pelanggan tersimpan untuk isi otomatis">
+                <option value="">-- Pilih Pelanggan Tersimpan --</option>
+              </select>
+              <button type="button" id="btn-save-as-customer" class="text-xs font-semibold px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition flex items-center gap-1" title="Simpan data pelanggan saat ini ke Master Pelanggan">
+                <span>💾</span> Simpan Pelanggan
+              </button>
+              <button type="button" id="btn-open-manage-customers" class="text-xs font-semibold px-2 py-1 rounded bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 transition flex items-center gap-1" title="Kelola data pelanggan tersimpan">
+                <span>👥</span> Kelola
+              </button>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="form-label">Nama Pelanggan / Perusahaan *</label>
+              <input type="text" id="input-client-name" list="datalist-customers" class="form-input font-semibold" placeholder="Contoh: CV. Maju Sentosa">
+              <datalist id="datalist-customers"></datalist>
+            </div>
+            <div>
+              <label class="form-label">Nama Kontak (Up/PIC)</label>
+              <input type="text" id="input-client-contact" class="form-input" placeholder="Contoh: Bpk. Bambang">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="form-label">No. Telepon / WhatsApp</label>
+              <input type="text" id="input-client-phone" class="form-input" placeholder="+62 81x-xxxx-xxxx">
+            </div>
+            <div>
+              <label class="form-label">Email Pelanggan</label>
+              <input type="email" id="input-client-email" class="form-input" placeholder="pelanggan@email.com">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="form-label">Alamat Penagihan (Billing)</label>
+              <textarea id="input-client-address" rows="2" class="form-input" placeholder="Alamat lengkap pelanggan..."></textarea>
+            </div>
+            <div>
+              <label class="form-label">Alamat Pengiriman (Opsional)</label>
+              <textarea id="input-shipping-address" rows="2" class="form-input" placeholder="Jika berbeda dengan alamat penagihan..."></textarea>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Card 3: Daftar Item Barang / Jasa -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 flex-wrap gap-2">
+          <div>
+            <h2 class="form-section-title mb-0 border-b-0 pb-0">
+              <span>📦</span> Rincian Barang / Jasa
+            </h2>
+            <p class="text-[11px] text-slate-400 mt-0.5">Ketik nama barang, pilihan dari katalog akan otomatis muncul untuk langsung diklik.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btn-goto-catalog" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition flex items-center gap-1.5" title="Buka menu Katalog Barang untuk menginput atau mengelola master harga jual">
+              <span>📦</span> Kelola Katalog
+            </button>
+          </div>
+        </div>
+
+        <div id="items-container">
+          <!-- Item rows rendered dynamically by app.js with rich autocomplete dropdown -->
+        </div>
+
+        <!-- Tombol Tambah Baris: Diletakkan persis di bawah card item terakhir -->
+        <div class="mt-3 pt-2">
+          <button type="button" id="btn-add-item" class="w-full py-2 px-3 text-xs font-semibold rounded-lg border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/60 hover:bg-blue-100/80 text-blue-700 transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99] whitespace-nowrap">
+            <span class="text-sm font-bold leading-none">+</span>
+            <span>Tambah Baris</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Card 4: Diskon, Pajak & Ongkir -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="form-section-title">
+          <span>💰</span> Diskon, Pajak & Biaya Tambahan
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+          <!-- Diskon Global -->
+          <div>
+            <label class="form-label">Potongan / Diskon Tambahan</label>
+            <div class="flex gap-2">
+              <select id="input-discount-type" class="form-input w-28 text-xs font-semibold">
+                <option value="fixed">Nominal (Rp)</option>
+                <option value="percent">Persen (%)</option>
+              </select>
+              <input type="text" inputmode="numeric" id="input-discount-val" class="form-input font-mono" placeholder="0" value="0">
+            </div>
+          </div>
+
+          <!-- PPN -->
+          <div>
+            <label class="form-label">Pajak Pertambahan Nilai (PPN %)</label>
+            <select id="input-tax-rate" class="form-input text-xs font-semibold">
+              <option value="0">Tanpa PPN (0%)</option>
+              <option value="11" selected>PPN 11% (Standar)</option>
+              <option value="12">PPN 12%</option>
+              <option value="10">PPN 10%</option>
+              <option value="5">PPN 5%</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Ongkir -->
+          <div>
+            <label class="form-label">Biaya Pengiriman / Ekspedisi (Rp)</label>
+            <input type="text" inputmode="numeric" id="input-shipping-fee" class="form-input font-mono" placeholder="0" value="0">
+          </div>
+          <!-- Biaya Lain -->
+          <div>
+            <label class="form-label">Biaya Lainnya / Materai / Admin (Rp)</label>
+            <input type="text" inputmode="numeric" id="input-other-fee" class="form-input font-mono" placeholder="0" value="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 5: Rekening Bank & Metode Pembayaran -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 flex-wrap gap-2">
+          <h2 class="form-section-title mb-0 border-b-0 pb-0">
+            <span>💳</span> Informasi Rekening Pembayaran
+          </h2>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btn-open-manage-banks" class="text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 transition flex items-center gap-1" title="Kelola daftar rekening bank master">
+              <span>💳</span> Master Rekening
+            </button>
+            <button type="button" id="btn-add-bank" class="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg border border-blue-200 transition">
+              + Tambah Baris
+            </button>
+          </div>
+        </div>
+
+        <!-- Master Bank Quick Selection Section -->
+        <div id="saved-banks-section" class="mb-3 p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-slate-700 flex items-center gap-1">
+              <span>⚡</span> Pilihan Rekening Tersimpan:
+            </span>
+            <span class="text-[11px] text-slate-500">Centang untuk mencantumkan di invoice ini</span>
+          </div>
+          <div id="saved-banks-checkboxes" class="flex flex-wrap gap-2">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Daftar Rekening Pada Invoice Ini:</div>
+        <div id="banks-container">
+          <!-- Dynamic bank rows -->
+        </div>
+      </div>
+
+      <!-- Card 6: Catatan, Syarat Ketentuan & Tanda Tangan -->
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <h2 class="form-section-title">
+          <span>✍️</span> Catatan & Tanda Tangan
+        </h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="form-label mb-0">Catatan Tambahan (Notes)</label>
+              <button type="button" id="btn-reset-default-notes" class="text-[11px] text-blue-600 hover:text-blue-800 font-medium" title="Kembalikan ke catatan standar">Teks Standar</button>
+            </div>
+            <textarea id="input-notes" rows="3" class="form-input text-xs" placeholder="Ucapan terima kasih atau catatan garansi...">Terima kasih atas kepercayaan Anda bertransaksi dengan kami. Mohon periksa kembali kondisi barang saat serah terima.</textarea>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="form-label mb-0">Syarat & Ketentuan (Terms)</label>
+              <button type="button" id="btn-reset-default-terms" class="text-[11px] text-blue-600 hover:text-blue-800 font-medium" title="Kembalikan ke syarat ketentuan standar">Teks Standar</button>
+            </div>
+            <textarea id="input-terms" rows="3" class="form-input text-xs" placeholder="Syarat pembayaran, nomor invoice acuan...">1. Pembayaran sah apabila dana sudah masuk ke rekening yang tertera di atas.
+2. Bukti transfer mohon dikonfirmasikan via WhatsApp.</textarea>
+          </div>
+        </div>
+
+        <!-- Tanda Tangan -->
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-slate-700 uppercase">Otorisasi / Tanda Tangan</span>
+            <div class="flex gap-2">
+              <button type="button" id="btn-open-signature-modal" class="text-xs font-semibold px-2.5 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 text-slate-700">
+                ✍️ Gambar TTD Digital
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="form-label">Nama Terang Penanda Tangan</label>
+              <input type="text" id="input-signature-name" class="form-input" placeholder="Contoh: Rafli Ramadhan, S.E.">
+            </div>
+            <div>
+              <label class="form-label">Jabatan</label>
+              <input type="text" id="input-signature-title" class="form-input" placeholder="Contoh: Manajer Keuangan / Direktur">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
+            <div>
+              <label class="form-label">Upload Gambar TTD / Stempel (Opsional)</label>
+              <input type="file" id="input-signature-file" accept="image/*" class="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-200 file:text-slate-700">
+            </div>
+            <div class="flex items-center gap-2 pt-4">
+              <input type="checkbox" id="input-show-stamp" class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300" checked>
+              <label for="input-show-stamp" class="text-xs font-medium text-slate-700">Tampilkan Stempel Status Airmark (PAID / LUNAS)</label>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: Real-Time Live Preview A4 Sheet -->
+    <div id="preview-container" class="w-full lg:w-[52%] xl:w-[55%] hidden lg:flex flex-col items-center">
+      
+      <!-- Preview Sticky Toolbar -->
+      <div id="preview-toolbar" class="w-full flex items-center justify-between mb-3 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm no-print">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            Pratinjau Langsung (A4)
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400 font-mono" id="zoom-percentage">100%</span>
+          <button id="btn-zoom-out" class="w-7 h-7 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold" title="Perkecil">−</button>
+          <button id="btn-zoom-reset" class="px-2 h-7 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium" title="Reset Zoom">Fit</button>
+          <button id="btn-zoom-in" class="w-7 h-7 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold" title="Perbesar">+</button>
+        </div>
+      </div>
+
+      <!-- A4 Sheet Container -->
+      <div class="invoice-sheet-container w-full">
+        <div id="invoice-preview-sheet" class="invoice-sheet">
+          
+          <!-- Watermark Stamp (LUNAS / UNPAID) -->
+          <div id="pv-stamp-watermark" class="stamp-watermark paid">LUNAS</div>
+
+          <!-- TOP: Header & Meta -->
+          <div>
+            <!-- Header Row -->
+            <div class="flex justify-between items-start border-b-2 border-slate-100 pb-2.5 mb-2.5 gap-4">
+              <!-- Left: Store / Company Info -->
+              <div class="w-[58%] max-w-[58%]">
+                <div class="flex items-center gap-2.5 mb-1">
+                  <img id="pv-store-logo" src="" alt="Store Logo" class="h-9 max-w-[120px] object-contain hidden">
+                  <h2 id="pv-store-name" class="text-base font-extrabold text-slate-900 tracking-tight leading-snug">PT. NUSANTARA MAJU BERSAMA</h2>
+                </div>
+                <p id="pv-store-tagline" class="text-[10px] text-blue-600 font-semibold mb-0.5">Solusi Pengadaan & Perdagangan Umum Berkualitas</p>
+                <p id="pv-store-address" class="text-[9.5px] text-slate-500 leading-tight">Jl. Sudirman No. 88, Gedung Sahid Lt. 12, Jakarta Pusat, DKI Jakarta 10220</p>
+                <div class="flex flex-wrap gap-x-2.5 gap-y-0.5 mt-1 text-[9px] text-slate-500">
+                  <span id="pv-store-phone">Telp/WA: +62 812-3456-7890</span>
+                  <span id="pv-store-email">Email: kontak@nusantarama.co.id</span>
+                  <span id="pv-store-npwp" class="font-mono">NPWP: 01.234.567.8-012.000</span>
+                </div>
+              </div>
+
+              <!-- Right: Invoice Title & Meta Box -->
+              <div class="w-[40%] max-w-[40%] text-right">
+                <div class="inline-block text-lg font-black text-blue-600 tracking-wider uppercase mb-1">
+                  INVOICE
+                </div>
+                
+                <div class="text-[10px] space-y-0.5">
+                  <div class="flex justify-end gap-2">
+                    <span class="text-slate-400">No. Invoice:</span>
+                    <span id="pv-invoice-number" class="font-bold text-slate-900 font-mono">INV/2026/XI/0001</span>
+                  </div>
+                  <div class="flex justify-end gap-2">
+                    <span class="text-slate-400">Tanggal:</span>
+                    <span id="pv-date" class="font-medium text-slate-800">23 November 2026</span>
+                  </div>
+                  <div class="flex justify-end gap-2">
+                    <span class="text-slate-400">Jatuh Tempo:</span>
+                    <span id="pv-due-date" class="font-medium text-slate-800">30 November 2026</span>
+                  </div>
+                  <div class="pt-0.5">
+                    <span id="pv-status-badge" class="px-2 py-0.5 text-[9.5px] font-extrabold rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      LUNAS
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Customer / Bill To Row -->
+            <div class="grid grid-cols-2 gap-4 bg-slate-50/80 p-2.5 rounded-lg border border-slate-200/80 mb-2.5">
+              <div>
+                <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider block mb-0.5">Ditagihkan Kepada (Bill To):</span>
+                <div id="pv-client-name" class="font-bold text-xs text-slate-900">CV. BINTANG KARYA SENTOSA</div>
+                <div id="pv-client-contact" class="text-[9.5px] text-slate-600">Up: Bpk. Ahmad Fauzi (Procurement)</div>
+                <div id="pv-client-address" class="text-[9px] text-slate-500 mt-0.5 leading-tight">Jl. Raya Darmo Permai No. 45, Kota Surabaya, Jawa Timur 60189</div>
+                <div class="flex flex-wrap gap-x-2 text-[9px] text-slate-500 mt-0.5">
+                  <span id="pv-client-phone">No. Telp/WA: +62 813-9876-5432</span>
+                  <span id="pv-client-email">Email: procurement@bintangkarya.com</span>
+                </div>
+              </div>
+
+              <div id="pv-shipping-row" class="hidden border-l border-slate-200 pl-3">
+                <span class="text-[9px] uppercase font-bold text-slate-400 tracking-wider block mb-0.5">Alamat Pengiriman (Ship To):</span>
+                <div id="pv-shipping-address" class="text-[9px] text-slate-600 leading-tight">-</div>
+              </div>
+            </div>
+
+            <!-- Items Table -->
+            <table class="invoice-table">
+              <thead>
+                <tr>
+                  <th style="width: 4%;" class="text-center">No</th>
+                  <th style="width: 34%;">Keterangan Barang / Jasa</th>
+                  <th style="width: 8%;" class="text-center whitespace-nowrap">Qty</th>
+                  <th style="width: 18%;" class="text-right whitespace-nowrap">Harga</th>
+                  <th style="width: 16%;" class="text-right whitespace-nowrap">Potongan</th>
+                  <th style="width: 20%;" class="text-right whitespace-nowrap">Total</th>
+                </tr>
+              </thead>
+              <tbody id="pv-table-body">
+                <!-- Dynamic Items -->
+              </tbody>
+            </table>
+
+            <!-- Summary & Terbilang -->
+            <div class="flex justify-between items-start gap-3 mt-2">
+              <!-- Left: Terbilang & Catatan Singkat -->
+              <div class="w-[50%] max-w-[50%]">
+                <div class="terbilang-box mb-2">
+                  <div class="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Terbilang:</div>
+                  <div id="pv-terbilang" class="font-semibold text-[8.5px] text-slate-800 leading-snug">
+                    Tiga Puluh Lima Juta Sembilan Ratus Tiga Puluh Lima Ribu Rupiah
+                  </div>
+                </div>
+
+                <!-- Payment Accounts -->
+                <div class="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                  <div class="text-[8px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Rekening Pembayaran Resmi:
+                  </div>
+                  <div id="pv-banks-container" class="space-y-1">
+                    <!-- Dynamic Banks -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Calculations Table -->
+              <div class="w-[47%] max-w-[47%] text-[9.5px] space-y-0.5">
+                <div class="flex justify-between items-center text-slate-600 py-0.25 gap-2">
+                  <span>Subtotal:</span>
+                  <span id="pv-subtotal" class="font-semibold text-slate-800 font-mono whitespace-nowrap">Rp 0</span>
+                </div>
+                
+                <div id="pv-discount-row" class="flex justify-between items-center text-emerald-600 py-0.25 gap-2 hidden">
+                  <span>Diskon Tambahan:</span>
+                  <span id="pv-discount-val" class="font-semibold font-mono whitespace-nowrap">- Rp 0</span>
+                </div>
+
+                <div id="pv-tax-row" class="flex justify-between items-center text-slate-600 py-0.25 gap-2">
+                  <span id="pv-tax-label">PPN (11%):</span>
+                  <span id="pv-tax-val" class="font-semibold text-slate-800 font-mono whitespace-nowrap">Rp 0</span>
+                </div>
+
+                <div id="pv-shipping-fee-row" class="flex justify-between items-center text-slate-600 py-0.25 gap-2">
+                  <span>Ongkos Kirim:</span>
+                  <span id="pv-shipping-fee-val" class="font-semibold text-slate-800 font-mono whitespace-nowrap">Rp 0</span>
+                </div>
+
+                <div id="pv-other-fee-row" class="flex justify-between items-center text-slate-600 py-0.25 gap-2 hidden">
+                  <span>Biaya Lainnya:</span>
+                  <span id="pv-other-fee-val" class="font-semibold text-slate-800 font-mono whitespace-nowrap">Rp 0</span>
+                </div>
+
+                <div class="border-t-2 border-slate-300 pt-1 flex justify-between items-center text-[11px] font-extrabold text-slate-900 gap-2">
+                  <span>Total Tagihan:</span>
+                  <span id="pv-grand-total" class="text-blue-700 font-mono whitespace-nowrap">Rp 0</span>
+                </div>
+
+                <!-- Down payment & balance due -->
+                <div id="pv-dp-row" class="flex justify-between items-center text-slate-600 py-0.25 border-t border-slate-200 gap-2 hidden">
+                  <span>Uang Muka (DP):</span>
+                  <span id="pv-dp-val" class="font-semibold text-emerald-600 font-mono whitespace-nowrap">Rp 0</span>
+                </div>
+
+                <div id="pv-balance-row" class="flex justify-between items-center text-[10.5px] font-bold text-amber-700 py-0.25 gap-2 hidden">
+                  <span>Sisa Tagihan:</span>
+                  <span id="pv-balance-val" class="font-mono whitespace-nowrap">Rp 0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Notes & Terms Box -->
+            <div class="grid grid-cols-2 gap-3 mt-2 pt-1.5 border-t border-slate-200 text-[8.5px] leading-tight">
+              <div id="pv-notes-box">
+                <span class="font-bold text-slate-700 block text-[8.5px] mb-0.5">Catatan:</span>
+                <p id="pv-notes" class="text-slate-500 text-[8px] leading-snug"></p>
+              </div>
+              <div id="pv-terms-box">
+                <span class="font-bold text-slate-700 block text-[8.5px] mb-0.5">Syarat & Ketentuan:</span>
+                <p id="pv-terms" class="text-slate-500 text-[8px] leading-snug"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- BOTTOM: Signatures & Thank you footer -->
+          <div class="pt-2 mt-2 border-t border-slate-200">
+            <div class="flex justify-between items-end">
+              
+              <!-- Left footer notice -->
+              <div class="text-[9.5px] text-slate-400">
+                <p class="font-medium text-slate-500">Terima kasih atas kerja sama dan kepercayaan Anda!</p>
+              </div>
+
+              <!-- Right: Signature Area -->
+              <div class="text-center w-40">
+                <p class="text-[10px] text-slate-500 mb-0.5">Hormat Kami,</p>
+                <div class="h-10 flex items-center justify-center my-0.5">
+                  <img id="pv-signature-img" src="" alt="Tanda Tangan" class="max-h-10 max-w-[130px] object-contain hidden">
+                </div>
+                <div id="pv-signature-name" class="font-bold text-[11px] text-slate-900 border-b border-slate-400 pb-0.5">Rafli Ramadhan, S.E.</div>
+                <div id="pv-signature-title" class="text-[9.5px] text-slate-500 mt-0.5">Direktur Operasional</div>
+              </div>
+
+            </div>
+          </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- END VIEW 1: Pembuat Invoice -->
+
+    <!-- VIEW 2: Data Penjualan (Tabel Data Penjualan & Dashboard) -->
+    <div id="view-sales-table" class="hidden w-full flex flex-col gap-5">
+      
+      <!-- Top Stat Cards (KPIs) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Card 1: Total Omset Penjualan -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Penjualan</p>
+            <h3 id="kpi-total-revenue" class="text-xl font-black text-slate-900 mt-1">Rp 0</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5" id="kpi-total-count">0 Transaksi</p>
+          </div>
+          <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold">
+            💰
+          </div>
+        </div>
+        
+        <!-- Card 2: Penjualan Lunas -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pembayaran Lunas</p>
+            <h3 id="kpi-paid-revenue" class="text-xl font-black text-emerald-600 mt-1">Rp 0</h3>
+            <p class="text-[11px] text-emerald-600 font-medium mt-0.5" id="kpi-paid-count">0 Transaksi Lunas</p>
+          </div>
+          <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold">
+            ✓
+          </div>
+        </div>
+
+        <!-- Card 3: Menunggu Pembayaran (Belum Lunas / DP) -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Belum Lunas / Piutang</p>
+            <h3 id="kpi-unpaid-revenue" class="text-xl font-black text-amber-600 mt-1">Rp 0</h3>
+            <p class="text-[11px] text-amber-600 font-medium mt-0.5" id="kpi-unpaid-count">0 Transaksi</p>
+          </div>
+          <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold">
+            ⏳
+          </div>
+        </div>
+
+        <!-- Card 4: Rata-rata Nilai Transaksi -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rata-Rata Penjualan</p>
+            <h3 id="kpi-avg-revenue" class="text-xl font-black text-indigo-600 mt-1">Rp 0</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">Per Invoice</p>
+          </div>
+          <div class="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl font-bold">
+            📈
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter & Action Bar -->
+      <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-3">
+        <!-- Search & Filters (Compact, Aligned Inline) -->
+        <div class="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+          <!-- Search Input -->
+          <div class="relative w-full sm:w-56">
+            <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-xs">🔍</span>
+            <input type="text" id="sales-search-input" placeholder="Cari invoice / pelanggan..." class="form-input pl-7 py-1.5 text-xs w-full">
+          </div>
+
+          <!-- Filter Status Dropdown (Compact) -->
+          <div class="w-full sm:w-36">
+            <select id="sales-filter-status" class="form-input text-xs w-full font-medium py-1.5 px-2.5 cursor-pointer">
+              <option value="ALL">Semua Status</option>
+              <option value="LUNAS">Lunas</option>
+              <option value="BELUM LUNAS">Belum Lunas</option>
+              <option value="JATUH TEMPO">Jatuh Tempo</option>
+              <option value="DP">Uang Muka / DP</option>
+            </select>
+          </div>
+
+          <!-- Sort By Dropdown (Compact) -->
+          <div class="w-full sm:w-36">
+            <select id="sales-filter-sort" class="form-input text-xs w-full font-medium py-1.5 px-2.5 cursor-pointer">
+              <option value="date-desc">Terbaru</option>
+              <option value="date-asc">Terlama</option>
+              <option value="total-desc">Nominal Tertinggi</option>
+              <option value="total-asc">Nominal Terendah</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Action Buttons (Export to Excel / CSV & Print) -->
+        <div class="flex items-center gap-2 w-full md:w-auto justify-end flex-wrap">
+          <div class="relative inline-block text-left" id="export-dropdown-wrapper">
+            <button type="button" id="btn-export-sales-csv" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center gap-1.5" title="Klik untuk opsi ekspor data penjualan">
+              <span>📊</span> Ekspor Excel (CSV) <span class="text-[9px] opacity-80">▼</span>
+            </button>
+            <div id="export-dropdown-menu" class="hidden absolute right-0 mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 py-1.5 divide-y divide-slate-100">
+              <div class="px-3.5 py-2 bg-slate-50 border-b border-slate-100">
+                <p class="text-[11px] font-bold text-slate-800">Pilih Format Ekspor Excel</p>
+                <p class="text-[10px] text-slate-500">Otomatis terpisah rapi per kolom di Excel</p>
+              </div>
+              <div class="py-1">
+                <button type="button" id="btn-export-sales-summary" class="w-full text-left px-3.5 py-2.5 text-xs hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 flex items-start gap-2.5 transition">
+                  <span class="text-base mt-0.5">📑</span>
+                  <div>
+                    <div class="font-bold text-slate-800">Laporan Transaksi Penjualan (Ringkas & Bersih)</div>
+                    <div class="text-[10.5px] text-slate-500 mt-0.5">1 baris per invoice (Data faktur, pelanggan & finansial lengkap)</div>
+                  </div>
+                </button>
+                <button type="button" id="btn-export-sales-items" class="w-full text-left px-3.5 py-2.5 text-xs hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 flex items-start gap-2.5 transition">
+                  <span class="text-base mt-0.5">📦</span>
+                  <div>
+                    <div class="font-bold text-slate-800">Rincian Detail Item Barang Terjual</div>
+                    <div class="text-[10.5px] text-slate-500 mt-0.5">1 baris per produk (Khusus jika butuh rincian barang & qty)</div>
+                  </div>
+                </button>
+              </div>
+              <div class="py-1 bg-slate-50/60">
+                <button type="button" id="btn-export-sales-comma" class="w-full text-left px-3.5 py-2 text-[11px] hover:bg-slate-100 text-slate-600 flex items-center gap-2 transition">
+                  <span>🌐</span> Format CSV Standar Koma (Google Sheets)
+                </button>
+              </div>
+            </div>
+          </div>
+          <button id="btn-print-sales-table" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition flex items-center gap-1.5">
+            <span>🖨️</span> Cetak Laporan
+          </button>
+          <button id="btn-create-invoice-from-sales" class="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition flex items-center gap-1.5">
+            <span>+</span> Buat Invoice Baru
+          </button>
+        </div>
+      </div>
+
+      <!-- The Sales Data Table -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table id="sales-data-table" class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200 text-[11px]">
+              <tr>
+                <th class="py-3 px-3.5 text-center w-12">No</th>
+                <th class="py-3 px-3.5">No. Invoice</th>
+                <th class="py-3 px-3.5 whitespace-nowrap">Tanggal</th>
+                <th class="py-3 px-3.5 whitespace-nowrap">Jatuh Tempo</th>
+                <th class="py-3 px-3.5">Pelanggan</th>
+                <th class="py-3 px-3.5">Item Barang / Jasa</th>
+                <th class="py-3 px-3.5 text-right whitespace-nowrap">Total Tagihan</th>
+                <th class="py-3 px-3.5 text-right whitespace-nowrap">Sisa Tagihan</th>
+                <th class="py-3 px-3.5 text-center whitespace-nowrap">Status Pembayaran</th>
+                <th class="py-3 px-3.5 text-center w-40">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="sales-table-body" class="divide-y divide-slate-100">
+              <!-- Populated dynamically by app.js -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Table Footer / Count -->
+        <div class="p-3 bg-slate-50/70 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+          <span id="sales-table-pagination-info">Menampilkan 0 data transaksi penjualan</span>
+        </div>
+      </div>
+    </div>
+    <!-- END VIEW 2: Data Penjualan -->
+
+    <!-- VIEW 3: Katalog Barang & Jasa (Master Input Terpisah) -->
+    <div id="view-catalog-manager" class="hidden w-full flex flex-col gap-5">
+      
+      <!-- Top Title Bar -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xl">📦</span>
+            <h2 class="text-lg font-bold text-slate-900">Master Katalog Barang & Jasa</h2>
+            <span id="catalog-count-badge" class="bg-blue-100 text-blue-700 text-xs px-2.5 py-0.5 rounded-full font-bold">0 Produk</span>
+          </div>
+          <p class="text-xs text-slate-500">
+            Kelola master nama barang, spesifikasi, dan harga satuan jual. Di menu Buat Invoice, Anda tinggal mengetik nama barang dan pilihannya akan langsung muncul untuk diklik.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <input type="file" id="catalog-excel-file-input" accept=".xlsx, .xls, .csv" class="hidden">
+          <button type="button" id="btn-download-catalog-template" class="px-3 py-2 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition flex items-center gap-1.5" title="Unduh format template Excel untuk katalog barang">
+            <span>📄</span> Template Excel
+          </button>
+          <button type="button" id="btn-import-catalog-excel" class="px-3.5 py-2 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center gap-1.5" title="Impor daftar produk dari file Excel (.xlsx) atau CSV">
+            <span>📥</span> Impor Excel / CSV
+          </button>
+          <button type="button" id="btn-catalog-create-invoice" class="px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition flex items-center gap-1.5">
+            <span>🧾</span> Buat Invoice Sekarang
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Layout: Form (Kiri) + Tabel (Kanan) -->
+      <div class="flex flex-col lg:flex-row gap-6">
+
+        <!-- Kiri: Form Input Katalog Barang Terpisah -->
+        <div class="w-full lg:w-[38%] xl:w-[34%] flex flex-col gap-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+              <h3 id="catalog-form-title" class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <span>➕</span> Input Barang / Jasa Baru
+              </h3>
+              <button type="button" id="btn-cancel-edit-catalog" class="text-xs font-semibold text-slate-500 hover:text-slate-800 hidden">
+                Batal Edit
+              </button>
+            </div>
+
+            <input type="hidden" id="catalog-input-id" value="">
+
+            <div class="space-y-3.5">
+              <div>
+                <label class="form-label">Nama Barang / Jasa *</label>
+                <input type="text" id="catalog-input-name" class="form-input font-semibold text-xs" placeholder="Contoh: Kabel LAN Cat6 305m / Laptop / Jasa Desain">
+              </div>
+
+              <div>
+                <label class="form-label">Spesifikasi / Deskripsi Barang</label>
+                <textarea id="catalog-input-desc" rows="3" class="form-input text-xs" placeholder="Rincian spesifikasi, tipe, garansi, atau detail layanan produk..."></textarea>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="form-label">Satuan</label>
+                  <input type="text" id="catalog-input-unit" class="form-input text-xs font-medium" placeholder="Pcs, Unit, Roll, Box, Jam" value="Pcs">
+                </div>
+                <div>
+                  <label class="form-label">Harga Satuan (Rp) *</label>
+                  <input type="text" inputmode="numeric" id="catalog-input-price" class="form-input text-xs font-mono font-bold" placeholder="0" value="0">
+                </div>
+              </div>
+
+              <div class="pt-2">
+                <button type="button" id="btn-save-catalog-item" class="w-full py-2.5 px-4 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition flex items-center justify-center gap-1.5">
+                  <span>💾</span> Simpan ke Katalog Barang
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Kanan: Tabel Master Katalog -->
+        <div class="flex-1 flex flex-col gap-4">
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            
+            <!-- Table Filter & Search -->
+            <div class="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-700">Daftar Produk di Katalog</span>
+                <span id="catalog-table-count" class="text-[11px] text-slate-500">0 barang</span>
+              </div>
+              <div class="w-full sm:w-72">
+                <input type="text" id="catalog-search-input" class="form-input text-xs py-1.5 px-3" placeholder="🔍 Cari nama barang atau spesifikasi...">
+              </div>
+            </div>
+
+            <!-- Table -->
+            <div class="overflow-x-auto flex-1">
+              <table id="catalog-table" class="w-full text-left text-xs border-collapse">
+                <thead class="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200 text-[11px]">
+                  <tr>
+                    <th class="py-3 px-3.5 text-center w-12">No</th>
+                    <th class="py-3 px-3.5">Nama Barang / Jasa</th>
+                    <th class="py-3 px-3.5">Spesifikasi / Deskripsi</th>
+                    <th class="py-3 px-3.5 text-center">Satuan</th>
+                    <th class="py-3 px-3.5 text-right">Harga Satuan</th>
+                    <th class="py-3 px-3.5 text-center w-36">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="catalog-table-body" class="divide-y divide-slate-100">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+    <!-- END VIEW 3: Katalog Barang -->
+
+  </main>
+
+  <!-- MODAL: Digital Signature Pad -->
+  <div id="modal-signature" class="modal-overlay fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200">
+      <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <span>✍️</span> Gores Tanda Tangan Digital
+        </h3>
+        <button id="btn-close-signature" class="text-slate-400 hover:text-slate-600">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-500 mb-2">Tanda tangani langsung di area bawah menggunakan mouse, touchpad, atau jari Anda di layar sentuh.</p>
+      
+      <div class="border-2 border-dashed border-slate-300 rounded-xl overflow-hidden bg-slate-50 mb-3">
+        <canvas id="signature-canvas" class="signature-canvas"></canvas>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <button id="btn-clear-signature" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+          Bersihkan Kanvas
+        </button>
+        <button id="btn-save-signature" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20 transition">
+          Simpan Tanda Tangan
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Invoice History & Backup -->
+  <div id="modal-history" class="modal-overlay fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📂</span>
+          <h3 class="text-base font-bold text-slate-900">Riwayat Invoice Tersimpan</h3>
+        </div>
+        <button id="btn-close-history" class="text-slate-400 hover:text-slate-600">✕</button>
+      </div>
+
+      <!-- Backup Actions -->
+      <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4 text-xs">
+        <span class="text-slate-600">Cadangkan atau pulihkan data invoice Anda:</span>
+        <div class="flex items-center gap-2">
+          <button id="btn-export-backup" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 font-semibold rounded-lg transition text-slate-700">
+            ⬇ Ekspor Backup (JSON)
+          </button>
+          <label class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 font-semibold rounded-lg transition text-slate-700 cursor-pointer">
+            ⬆ Pulihkan (JSON)
+            <input type="file" id="input-import-backup" accept=".json" class="hidden">
+          </label>
+        </div>
+      </div>
+
+      <!-- Table History -->
+      <div class="overflow-y-auto flex-1 border border-slate-200 rounded-xl">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-600 uppercase font-bold sticky top-0 border-b border-slate-200">
+            <tr>
+              <th class="py-2.5 px-3">No. Invoice</th>
+              <th class="py-2.5 px-3">Pelanggan</th>
+              <th class="py-2.5 px-3">Tanggal</th>
+              <th class="py-2.5 px-3">Total</th>
+              <th class="py-2.5 px-3">Status</th>
+              <th class="py-2.5 px-3 text-right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="history-table-body">
+            <!-- Dynamic History Rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Master Pelanggan -->
+  <div id="modal-manage-customers" class="modal-overlay fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">👥</span>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Master Data Pelanggan</h3>
+            <p class="text-xs text-slate-500">Kelola daftar pelanggan tetap agar saat membuat invoice tinggal pilih namanya.</p>
+          </div>
+        </div>
+        <button id="btn-close-manage-customers" class="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+      </div>
+
+      <!-- Form Tambah / Edit Pelanggan -->
+      <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <span id="cust-form-title" class="text-xs font-bold text-slate-700 uppercase">Tambah Pelanggan Baru</span>
+          <button type="button" id="btn-cancel-edit-cust" class="text-xs text-slate-500 hover:text-slate-800 hidden font-semibold">Batal Edit</button>
+        </div>
+        <input type="hidden" id="cust-edit-id" value="">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-2.5">
+          <div>
+            <label class="form-label text-[11px]">Nama Pelanggan / Perusahaan *</label>
+            <input type="text" id="cust-modal-name" class="form-input text-xs" placeholder="Contoh: CV. Bintang Karya Sentosa">
+          </div>
+          <div>
+            <label class="form-label text-[11px]">Nama Kontak (Up/PIC)</label>
+            <input type="text" id="cust-modal-contact" class="form-input text-xs" placeholder="Contoh: Bpk. Ahmad Fauzi">
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-2.5">
+          <div>
+            <label class="form-label text-[11px]">No. Telepon / WhatsApp</label>
+            <input type="text" id="cust-modal-phone" class="form-input text-xs" placeholder="+62 813-xxxx-xxxx">
+          </div>
+          <div>
+            <label class="form-label text-[11px]">Email Pelanggan</label>
+            <input type="email" id="cust-modal-email" class="form-input text-xs" placeholder="kontak@pelanggan.com">
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-3">
+          <div>
+            <label class="form-label text-[11px]">Alamat Penagihan</label>
+            <textarea id="cust-modal-address" rows="2" class="form-input text-xs" placeholder="Alamat lengkap penagihan"></textarea>
+          </div>
+          <div>
+            <label class="form-label text-[11px]">Alamat Pengiriman (Opsional)</label>
+            <textarea id="cust-modal-shipping" rows="2" class="form-input text-xs" placeholder="Alamat pengiriman barang"></textarea>
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="button" id="btn-save-cust-modal" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition">
+            Simpan Pelanggan
+          </button>
+        </div>
+      </div>
+
+      <!-- Search & Customer List -->
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold text-slate-600">Daftar Pelanggan Tersimpan</span>
+        <input type="text" id="cust-search-input" class="form-input text-xs py-1 px-2.5 w-64" placeholder="Cari nama atau telepon...">
+      </div>
+      <div class="overflow-y-auto flex-1 border border-slate-200 rounded-xl">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-600 uppercase font-bold sticky top-0 border-b border-slate-200">
+            <tr>
+              <th class="py-2.5 px-3">Nama Pelanggan</th>
+              <th class="py-2.5 px-3">Kontak / Telp</th>
+              <th class="py-2.5 px-3">Alamat</th>
+              <th class="py-2.5 px-3 text-right w-44">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="cust-table-body" class="divide-y divide-slate-100">
+            <!-- Rendered dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Master Katalog Produk -->
+  <div id="modal-manage-products" class="modal-overlay fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📦</span>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Master Katalog Produk & Jasa</h3>
+            <p class="text-xs text-slate-500">Simpan nama barang dan harga jualnya, otomatis muncul saat membuat invoice.</p>
+          </div>
+        </div>
+        <button id="btn-close-manage-products" class="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+      </div>
+
+      <!-- Form Tambah / Edit Produk -->
+      <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <span id="prod-form-title" class="text-xs font-bold text-slate-700 uppercase">Tambah Barang / Jasa Baru</span>
+          <button type="button" id="btn-cancel-edit-prod" class="text-xs text-slate-500 hover:text-slate-800 hidden font-semibold">Batal Edit</button>
+        </div>
+        <input type="hidden" id="prod-edit-id" value="">
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5 mb-2.5">
+          <div class="md:col-span-6">
+            <label class="form-label text-[11px]">Nama Barang / Jasa *</label>
+            <input type="text" id="prod-modal-name" class="form-input text-xs" placeholder="Contoh: Laptop Ultrabook 14 Inch">
+          </div>
+          <div class="md:col-span-3">
+            <label class="form-label text-[11px]">Satuan</label>
+            <input type="text" id="prod-modal-unit" class="form-input text-xs" placeholder="Pcs, Unit, Box, dll" value="Unit">
+          </div>
+          <div class="md:col-span-3">
+            <label class="form-label text-[11px]">Harga Jual Satuan (Rp) *</label>
+            <input type="text" inputmode="numeric" id="prod-modal-price" class="form-input text-xs font-bold font-mono" placeholder="0" value="0">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-[11px]">Deskripsi / Spesifikasi Produk (Opsional)</label>
+          <input type="text" id="prod-modal-desc" class="form-input text-xs" placeholder="RAM 16GB, SSD 512GB, Garansi 2 Tahun, dsb">
+        </div>
+        <div class="flex justify-end">
+          <button type="button" id="btn-save-prod-modal" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition">
+            Simpan ke Katalog
+          </button>
+        </div>
+      </div>
+
+      <!-- Search & Product List -->
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-bold text-slate-600">Daftar Produk & Jasa di Katalog</span>
+        <input type="text" id="prod-search-input" class="form-input text-xs py-1 px-2.5 w-64" placeholder="Cari nama barang...">
+      </div>
+      <div class="overflow-y-auto flex-1 border border-slate-200 rounded-xl">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-600 uppercase font-bold sticky top-0 border-b border-slate-200">
+            <tr>
+              <th class="py-2.5 px-3">Nama Barang / Jasa</th>
+              <th class="py-2.5 px-3">Satuan</th>
+              <th class="py-2.5 px-3 text-right">Harga Jual</th>
+              <th class="py-2.5 px-3">Deskripsi</th>
+              <th class="py-2.5 px-3 text-right w-44">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="prod-table-body" class="divide-y divide-slate-100">
+            <!-- Rendered dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Master Rekening Bank -->
+  <div id="modal-manage-banks" class="modal-overlay fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">💳</span>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Master Rekening Bank & E-Wallet</h3>
+            <p class="text-xs text-slate-500">Simpan nomor rekening agar saat buat invoice tinggal pilih tanpa mengetik ulang.</p>
+          </div>
+        </div>
+        <button id="btn-close-manage-banks" class="text-slate-400 hover:text-slate-600 font-bold p-1">✕</button>
+      </div>
+
+      <!-- Form Tambah / Edit Rekening -->
+      <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <span id="bank-form-title" class="text-xs font-bold text-slate-700 uppercase">Tambah Rekening Baru</span>
+          <button type="button" id="btn-cancel-edit-bank" class="text-xs text-slate-500 hover:text-slate-800 hidden font-semibold">Batal Edit</button>
+        </div>
+        <input type="hidden" id="bank-edit-id" value="">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 mb-3">
+          <div>
+            <label class="form-label text-[11px]">Nama Bank / E-Wallet *</label>
+            <input type="text" id="bank-modal-name" class="form-input text-xs" placeholder="BCA / Mandiri / BRI / QRIS">
+          </div>
+          <div>
+            <label class="form-label text-[11px]">No. Rekening / No. HP *</label>
+            <input type="text" id="bank-modal-number" class="form-input text-xs font-mono" placeholder="Contoh: 8830-1234-5678">
+          </div>
+          <div>
+            <label class="form-label text-[11px]">Atas Nama (A/N) *</label>
+            <input type="text" id="bank-modal-owner" class="form-input text-xs" placeholder="Nama Pemilik Rekening">
+          </div>
+        </div>
+        <div class="flex justify-end">
+          <button type="button" id="btn-save-bank-modal" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition">
+            Simpan Rekening
+          </button>
+        </div>
+      </div>
+
+      <!-- Bank List -->
+      <div class="overflow-y-auto flex-1 border border-slate-200 rounded-xl">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-600 uppercase font-bold sticky top-0 border-b border-slate-200">
+            <tr>
+              <th class="py-2.5 px-3">Bank / E-Wallet</th>
+              <th class="py-2.5 px-3">Nomor Rekening</th>
+              <th class="py-2.5 px-3">Atas Nama</th>
+              <th class="py-2.5 px-3 text-right w-40">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="bank-table-body" class="divide-y divide-slate-100">
+            <!-- Rendered dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Preview & Konfirmasi Impor Excel Katalog -->
+  <div id="modal-import-catalog" class="modal-overlay fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white rounded-2xl max-w-2xl w-full p-5 shadow-2xl border border-slate-200 flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+        <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+          <span>📥</span> Pratinjau Impor Barang dari Excel / CSV
+        </h3>
+        <button id="btn-close-import-catalog" class="text-slate-400 hover:text-slate-600 font-bold text-base">✕</button>
+      </div>
+
+      <div class="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-800">
+        <div>
+          <span class="font-bold text-slate-900" id="import-file-name">file.xlsx</span>
+          <span class="block text-[11px] text-emerald-700 mt-0.5" id="import-row-count">Ditemukan 0 produk valid</span>
+        </div>
+        <span class="px-2.5 py-1 bg-emerald-600 text-white rounded-lg font-bold text-xs shadow-sm">Siap Diimpor</span>
+      </div>
+
+      <!-- Preview Table -->
+      <div class="overflow-y-auto flex-1 border border-slate-200 rounded-xl mb-3">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-slate-50 text-slate-600 font-bold uppercase sticky top-0 border-b border-slate-200 text-[11px]">
+            <tr>
+              <th class="py-2.5 px-3 text-center w-10">No</th>
+              <th class="py-2.5 px-3">Nama Barang / Jasa</th>
+              <th class="py-2.5 px-3">Spesifikasi</th>
+              <th class="py-2.5 px-3 text-center w-20">Satuan</th>
+              <th class="py-2.5 px-3 text-right w-28">Harga Satuan</th>
+            </tr>
+          </thead>
+          <tbody id="import-preview-table-body" class="divide-y divide-slate-100 font-medium">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-slate-100">
+        <label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+          <input type="checkbox" id="check-overwrite-existing" checked class="rounded border-slate-300 text-blue-600">
+          <span>Perbarui data jika nama barang sudah ada di katalog</span>
+        </label>
+        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button type="button" id="btn-cancel-import-catalog" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+            Batal
+          </button>
+          <button type="button" id="btn-confirm-import-catalog" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center gap-1.5">
+            <span>✓</span> Simpan ke Katalog
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Konfirmasi Kustom Aplikasi (Desktop App Native Experience) -->
+  <div id="modal-app-confirm" style="display: none;" class="modal-overlay fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] hidden flex items-center justify-center p-4 transition-all duration-200">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 border border-slate-100 transform transition-all scale-100 text-center animate-dialog">
+      <!-- Icon Container -->
+      <div id="app-confirm-icon-bg" class="w-14 h-14 mx-auto mb-4 rounded-2xl flex items-center justify-center bg-rose-50 text-rose-600 text-2xl shadow-inner border border-rose-100">
+        <span id="app-confirm-icon">🗑️</span>
+      </div>
+      <!-- Title -->
+      <h3 id="app-confirm-title" class="text-base font-bold text-slate-900 mb-2">Konfirmasi Tindakan</h3>
+      <!-- Message -->
+      <p id="app-confirm-message" class="text-xs text-slate-600 mb-6 leading-relaxed">Apakah Anda yakin ingin melanjutkan tindakan ini?</p>
+      <!-- Action Buttons -->
+      <div class="grid grid-cols-2 gap-3">
+        <button type="button" id="btn-app-confirm-cancel" class="w-full py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs transition active:scale-95 cursor-pointer">
+          Batal
+        </button>
+        <button type="button" id="btn-app-confirm-ok" class="w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-200 transition active:scale-95 cursor-pointer">
+          Ya, Lanjutkan
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="no-print"></div>
+
+  <!-- Client-side Third Party Libraries -->
+  <script src="libs/lucide.min.js"></script>
+  <script src="libs/html2pdf.bundle.min.js"></script>
+  <script src="libs/signature_pad.umd.min.js"></script>
+  <script src="libs/xlsx.full.min.js"></script>
+
+  <!-- Application Storage & Services -->
+  <script src="js/storage.js"></script>
+  <script src="js/pdf-export.js"></script>
+
+  <!-- Modular Application Subsystems -->
+  <script src="js/modules/formatters.js"></script>
+  <script src="js/modules/dialogs.js"></script>
+  <script src="js/modules/preview.js"></script>
+  <script src="js/modules/catalog.js"></script>
+  <script src="js/modules/sales.js"></script>
+  <script src="js/modules/master-data.js"></script>
+
+  <!-- Core App Controller & Lifecycle -->
+  <script src="js/app.js"></script>
+
+</body>
+</html>
+
