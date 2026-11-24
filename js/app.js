@@ -1,136 +1,66 @@
 /**
- * InvoicePro - Main Application Controller
+ * InvoicePro - Core Application Orchestrator & Invoice Builder Controller
+ * Manages invoice state, form interactions, live preview synchronization, and module lifecycle.
  */
 
-// Format Number to Rupiah (IDR)
-function formatRupiah(amount, withPrefix = true) {
-  if (amount === undefined || amount === null || isNaN(amount)) amount = 0;
-  const formatted = Math.round(amount).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return withPrefix ? `Rp ${formatted}` : formatted;
-}
+// Global Application State
+window.currentInvoice = null;
+window.signaturePad = null;
+window.currentZoom = 1;
 
-// Convert Number to Indonesian Words (Terbilang)
-function terbilangAngka(n) {
-  n = Math.floor(Math.abs(n));
-  const huruf = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
-  
-  if (n < 12) return huruf[n];
-  if (n < 20) return terbilangAngka(n - 10) + ' Belas';
-  if (n < 100) return (huruf[Math.floor(n / 10)] || terbilangAngka(Math.floor(n / 10))) + ' Puluh ' + terbilangAngka(n % 10);
-  if (n < 200) return 'Seratus ' + terbilangAngka(n - 100);
-  if (n < 1000) return terbilangAngka(Math.floor(n / 100)) + ' Ratus ' + terbilangAngka(n % 100);
-  if (n < 2000) return 'Seribu ' + terbilangAngka(n - 1000);
-  if (n < 1000000) return terbilangAngka(Math.floor(n / 1000)) + ' Ribu ' + terbilangAngka(n % 1000);
-  if (n < 1000000000) return terbilangAngka(Math.floor(n / 1000000)) + ' Juta ' + terbilangAngka(n % 1000000);
-  if (n < 1000000000000) return terbilangAngka(Math.floor(n / 1000000000)) + ' Miliar ' + terbilangAngka(n % 1000000000);
-  if (n < 1000000000000000) return terbilangAngka(Math.floor(n / 1000000000000)) + ' Triliun ' + terbilangAngka(n % 1000000000000);
-  return '';
-}
-
-function angkaKeTerbilang(n) {
-  if (n === 0 || isNaN(n)) return 'Nol Rupiah';
-  const text = terbilangAngka(n).replace(/\s+/g, ' ').trim();
-  return text ? `${text} Rupiah` : 'Nol Rupiah';
-}
-
-// Format date to Indonesian localized format (e.g., 23 November 2026)
-function formatTanggalIndo(dateStr) {
-  if (!dateStr) return '-';
-  const months = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-  ];
-  const parts = dateStr.split('-');
-  if (parts.length !== 3) return dateStr;
-  const year = parts[0];
-  const month = months[parseInt(parts[1], 10) - 1] || parts[1];
-  const day = parseInt(parts[2], 10);
-  return `${day} ${month} ${year}`;
-}
-
-// Generate unique invoice number
-function generateInvoiceNumber() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const random = Math.floor(1000 + Math.random() * 9000);
-  return `INV/${year}${month}${day}/${random}`;
-}
-
-// Toast notification helper
-function showToast(message, type = 'success') {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  
-  const icon = type === 'success' ? '✓' : '!';
-  toast.innerHTML = `
-    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full ${type === 'success' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'} font-bold text-xs">${icon}</span>
-    <span>${message}</span>
-  `;
-
-  container.appendChild(toast);
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateY(10px)';
-    toast.style.transition = 'all 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
-}
-
-// Application State
-let currentInvoice = null;
-let signaturePad = null;
-let currentZoom = 1;
-
+// Document Ready Bootstrapper
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize Lucide icons
   if (window.lucide) {
     window.lucide.createIcons();
   }
 
-  // Check saved store profile
-  const savedProfile = StorageService.getStoreProfile();
+  // Start with clean blank invoice (respects saved store profile if any)
+  window.currentInvoice = StorageService.getBlankInvoice();
 
-  // Load existing or sample data
-  const initialData = JSON.parse(JSON.stringify(window.DEFAULT_SAMPLE_DATA));
-  if (savedProfile) {
-    initialData.store = { ...initialData.store, ...savedProfile };
-  }
-
-  currentInvoice = initialData;
-
-  // Initialize UI
+  // Initialize UI & Subsystems
   initSignaturePad();
   populateFormFromState();
   setupEventListeners();
-  updateLivePreview();
-  renderHistoryTable();
-  renderSalesTable();
+
+  // Initialize modular controllers
+  if (typeof initMasterDataControllers === 'function') initMasterDataControllers();
+  if (typeof setupSalesEventListeners === 'function') setupSalesEventListeners();
+  if (typeof setupCatalogViewEvents === 'function') setupCatalogViewEvents();
+  if (typeof setupPreviewZoomControls === 'function') setupPreviewZoomControls();
+
+  // Initial renders
+  if (typeof updateLivePreview === 'function') updateLivePreview();
+  if (typeof renderHistoryTable === 'function') renderHistoryTable();
+  if (typeof renderSalesTable === 'function') renderSalesTable();
+  if (typeof updateCatalogBadge === 'function') updateCatalogBadge();
+
+  // Navigation controller
   initViewNavigation();
 });
 
-// Initialize Signature Pad
+/**
+ * Initialize Signature Pad on HTML5 Canvas
+ */
 function initSignaturePad() {
   const canvas = document.getElementById('signature-canvas');
   if (canvas && window.SignaturePad) {
-    signaturePad = new SignaturePad(canvas, {
+    window.signaturePad = new SignaturePad(canvas, {
       backgroundColor: 'rgba(255, 255, 255, 0)',
       penColor: '#0f172a'
     });
 
-    // Resize canvas correctly
+    // Resize canvas correctly for high-DPI displays
     function resizeCanvas() {
       const ratio = Math.max(window.devicePixelRatio || 1, 1);
       canvas.width = canvas.offsetWidth * ratio;
       canvas.height = canvas.offsetHeight * ratio;
       canvas.getContext("2d").scale(ratio, ratio);
-      signaturePad.clear();
-      if (currentInvoice.signatureImage) {
-        signaturePad.fromDataURL(currentInvoice.signatureImage);
+      if (window.signaturePad) {
+        window.signaturePad.clear();
+        if (window.currentInvoice && window.currentInvoice.signatureImage) {
+          window.signaturePad.fromDataURL(window.currentInvoice.signatureImage);
+        }
       }
     }
 
@@ -139,74 +69,135 @@ function initSignaturePad() {
   }
 }
 
-// Populate Form inputs from current state
+/**
+ * Populate all form inputs from current state
+ */
 function populateFormFromState() {
-  const inv = currentInvoice;
+  const inv = window.currentInvoice;
+  if (!inv) return;
 
   // Theme
-  document.getElementById('input-theme').value = inv.theme || 'blue';
-  document.body.setAttribute('data-theme', inv.theme || 'blue');
+  const themeInput = document.getElementById('input-theme');
+  if (themeInput) themeInput.value = inv.theme || 'slate';
+  document.body.setAttribute('data-theme', inv.theme || 'slate');
 
   // Meta
-  document.getElementById('input-invoice-number').value = inv.invoiceNumber || '';
-  document.getElementById('input-date').value = inv.date || '';
-  document.getElementById('input-due-date').value = inv.dueDate || '';
-  document.getElementById('input-status').value = inv.status || 'LUNAS';
+  const elInvNo = document.getElementById('input-invoice-number');
+  if (elInvNo) elInvNo.value = inv.invoiceNumber || '';
+  validateInvoiceNumber();
+  const elDate = document.getElementById('input-date');
+  if (elDate) elDate.value = inv.date || '';
+  const elDueDate = document.getElementById('input-due-date');
+  if (elDueDate) elDueDate.value = inv.dueDate || '';
+  const elStatus = document.getElementById('input-status');
+  if (elStatus) elStatus.value = inv.status || 'LUNAS';
+
+  const dpContainer = document.getElementById('dp-input-container');
+  if (dpContainer) {
+    if (inv.status === 'DP') {
+      dpContainer.classList.remove('hidden');
+    } else {
+      dpContainer.classList.add('hidden');
+    }
+  }
 
   // Store Info
-  document.getElementById('input-store-name').value = inv.store.name || '';
-  document.getElementById('input-store-tagline').value = inv.store.tagline || '';
-  document.getElementById('input-store-address').value = inv.store.address || '';
-  document.getElementById('input-store-phone').value = inv.store.phone || '';
-  document.getElementById('input-store-email').value = inv.store.email || '';
-  document.getElementById('input-store-npwp').value = inv.store.npwp || '';
+  const elStoreName = document.getElementById('input-store-name');
+  if (elStoreName) elStoreName.value = inv.store.name || '';
+  const elStoreTag = document.getElementById('input-store-tagline');
+  if (elStoreTag) elStoreTag.value = inv.store.tagline || '';
+  const elStoreAddr = document.getElementById('input-store-address');
+  if (elStoreAddr) elStoreAddr.value = inv.store.address || '';
+  const elStorePhone = document.getElementById('input-store-phone');
+  if (elStorePhone) elStorePhone.value = inv.store.phone || '';
+  const elStoreEmail = document.getElementById('input-store-email');
+  if (elStoreEmail) elStoreEmail.value = inv.store.email || '';
+  const elStoreNpwp = document.getElementById('input-store-npwp');
+  if (elStoreNpwp) elStoreNpwp.value = inv.store.npwp || '';
 
-  if (inv.store.logo) {
-    document.getElementById('logo-preview-img').src = inv.store.logo;
-    document.getElementById('logo-preview-container').classList.remove('hidden');
-  } else {
-    document.getElementById('logo-preview-container').classList.add('hidden');
+  const logoPreviewImg = document.getElementById('logo-preview-img');
+  const logoPreviewContainer = document.getElementById('logo-preview-container');
+  if (logoPreviewImg && logoPreviewContainer) {
+    if (inv.store.logo) {
+      logoPreviewImg.src = inv.store.logo;
+      logoPreviewContainer.classList.remove('hidden');
+    } else {
+      logoPreviewContainer.classList.add('hidden');
+    }
   }
 
   // Client Info
-  document.getElementById('input-client-name').value = inv.client.name || '';
-  document.getElementById('input-client-contact').value = inv.client.contactPerson || '';
-  document.getElementById('input-client-phone').value = inv.client.phone || '';
-  document.getElementById('input-client-email').value = inv.client.email || '';
-  document.getElementById('input-client-address').value = inv.client.address || '';
-  document.getElementById('input-shipping-address').value = inv.client.shippingAddress || '';
+  const elClientName = document.getElementById('input-client-name');
+  if (elClientName) elClientName.value = inv.client.name || '';
+  const elClientContact = document.getElementById('input-client-contact');
+  if (elClientContact) elClientContact.value = inv.client.contactPerson || '';
+  const elClientPhone = document.getElementById('input-client-phone');
+  if (elClientPhone) elClientPhone.value = inv.client.phone || '';
+  const elClientEmail = document.getElementById('input-client-email');
+  if (elClientEmail) elClientEmail.value = inv.client.email || '';
+  const elClientAddress = document.getElementById('input-client-address');
+  if (elClientAddress) elClientAddress.value = inv.client.address || '';
+  const elShippingAddress = document.getElementById('input-shipping-address');
+  if (elShippingAddress) elShippingAddress.value = inv.client.shippingAddress || '';
 
   // Items
   renderFormItems();
 
   // Financial fields
-  document.getElementById('input-discount-type').value = inv.globalDiscountType || 'fixed';
-  document.getElementById('input-discount-val').value = inv.globalDiscountValue || 0;
-  document.getElementById('input-tax-rate').value = inv.taxRate || 0;
-  document.getElementById('input-shipping-fee').value = inv.shippingFee || 0;
-  document.getElementById('input-other-fee').value = inv.otherFee || 0;
-  document.getElementById('input-down-payment').value = inv.downPayment || 0;
+  const discType = inv.globalDiscountType || 'fixed';
+  const elDiscType = document.getElementById('input-discount-type');
+  if (elDiscType) elDiscType.value = discType;
+
+  const elDiscVal = document.getElementById('input-discount-val');
+  if (elDiscVal) {
+    elDiscVal.value = discType === 'percent'
+      ? (inv.globalDiscountValue || 0)
+      : formatThousands(inv.globalDiscountValue || 0);
+  }
+
+  const elTaxRate = document.getElementById('input-tax-rate');
+  if (elTaxRate) elTaxRate.value = inv.taxRate || 0;
+
+  const elShipping = document.getElementById('input-shipping-fee');
+  if (elShipping) elShipping.value = formatThousands(inv.shippingFee || 0);
+
+  const elOther = document.getElementById('input-other-fee');
+  if (elOther) elOther.value = formatThousands(inv.otherFee || 0);
+
+  const elDp = document.getElementById('input-down-payment');
+  if (elDp) elDp.value = formatThousands(inv.downPayment || 0);
 
   // Banks
   renderFormBanks();
 
   // Notes & Terms
-  document.getElementById('input-notes').value = inv.notes || '';
-  document.getElementById('input-terms').value = inv.terms || '';
+  const elNotes = document.getElementById('input-notes');
+  if (elNotes) {
+    elNotes.value = inv.notes !== undefined ? inv.notes : (typeof DEFAULT_NOTES !== 'undefined' ? DEFAULT_NOTES : '');
+  }
+  const elTerms = document.getElementById('input-terms');
+  if (elTerms) {
+    elTerms.value = inv.terms !== undefined ? inv.terms : (typeof DEFAULT_TERMS !== 'undefined' ? DEFAULT_TERMS : '');
+  }
 
   // Signature
-  document.getElementById('input-signature-name').value = inv.signatureName || '';
-  document.getElementById('input-signature-title').value = inv.signatureTitle || '';
-  document.getElementById('input-show-stamp').checked = !!inv.showStamp;
+  const elSigName = document.getElementById('input-signature-name');
+  if (elSigName) elSigName.value = inv.signatureName || '';
+  const elSigTitle = document.getElementById('input-signature-title');
+  if (elSigTitle) elSigTitle.value = inv.signatureTitle || '';
+  const elShowStamp = document.getElementById('input-show-stamp');
+  if (elShowStamp) elShowStamp.checked = !!inv.showStamp;
 }
 
-// Render dynamic items in form
+/**
+ * Render dynamic items in form with interactive auto-complete and calculations
+ */
 function renderFormItems() {
   const container = document.getElementById('items-container');
-  if (!container) return;
+  if (!container || !window.currentInvoice) return;
   container.innerHTML = '';
 
-  currentInvoice.items.forEach((item, index) => {
+  window.currentInvoice.items.forEach((item, index) => {
     const itemRow = document.createElement('div');
     itemRow.className = 'bg-slate-50 border border-slate-200 p-3 rounded-lg mb-3 item-row relative transition-all hover:border-slate-300';
     itemRow.dataset.index = index;
@@ -216,24 +207,25 @@ function renderFormItems() {
     itemRow.innerHTML = `
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
-          <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-700 inline-flex items-center justify-center text-xs">${index + 1}</span>
+          <span class="w-5 h-5 rounded-full bg-blue-100 text-blue-700 inline-flex items-center justify-center text-xs font-bold">${index + 1}</span>
           Item Barang / Jasa
         </span>
         <div class="flex items-center gap-1">
-          <button type="button" class="btn-duplicate-item text-xs text-slate-500 hover:text-blue-600 px-2 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50" title="Duplikat item">
+          <button type="button" class="btn-duplicate-item text-xs text-slate-500 hover:text-blue-600 px-2 py-1 rounded bg-white border border-slate-200 hover:bg-slate-50 transition cursor-pointer" title="Duplikat item">
             Salin
           </button>
-          ${currentInvoice.items.length > 1 ? `
-          <button type="button" class="btn-delete-item text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded bg-white border border-red-200 hover:bg-red-50" title="Hapus item">
+          ${window.currentInvoice.items.length > 1 ? `
+          <button type="button" class="btn-delete-item text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded bg-white border border-red-200 hover:bg-red-50 transition cursor-pointer" title="Hapus item">
             Hapus
           </button>` : ''}
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-12 gap-2 mb-2">
-        <div class="md:col-span-8">
+        <div class="md:col-span-8 relative item-autocomplete-box">
           <label class="form-label">Nama Barang / Jasa *</label>
-          <input type="text" class="form-input item-name" placeholder="Contoh: Jasa Pembuatan Website / Produk X" value="${escapeHtml(item.name)}">
+          <input type="text" class="form-input item-name font-semibold" placeholder="Ketik nama barang (pilihan katalog otomatis muncul)..." value="${escapeHtml(item.name)}" autocomplete="off">
+          <div class="catalog-suggest-dropdown hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-40 max-h-56 overflow-y-auto divide-y divide-slate-100"></div>
         </div>
         <div class="md:col-span-4">
           <label class="form-label">Satuan</label>
@@ -255,11 +247,11 @@ function renderFormItems() {
         </div>
         <div class="col-span-1 md:col-span-4">
           <label class="form-label">Harga Satuan (Rp)</label>
-          <input type="number" min="0" step="1000" class="form-input item-price" value="${item.price}">
+          <input type="text" inputmode="numeric" class="form-input item-price font-bold font-mono" placeholder="0" value="${formatThousands(item.price)}">
         </div>
         <div class="col-span-1 md:col-span-2">
           <label class="form-label">Potongan (Rp)</label>
-          <input type="number" min="0" step="1000" class="form-input item-discount" value="${item.discount || 0}">
+          <input type="text" inputmode="numeric" class="form-input item-discount font-mono" placeholder="0" value="${formatThousands(item.discount || 0)}">
         </div>
         <div class="col-span-1 md:col-span-3 bg-white p-2 rounded border border-slate-200 text-right">
           <span class="text-[10px] text-slate-400 block uppercase font-semibold">Subtotal</span>
@@ -268,37 +260,149 @@ function renderFormItems() {
       </div>
     `;
 
-    // Row events
+    // Row element bindings
     const nameInput = itemRow.querySelector('.item-name');
     const unitInput = itemRow.querySelector('.item-unit');
     const descInput = itemRow.querySelector('.item-desc');
     const qtyInput = itemRow.querySelector('.item-qty');
     const priceInput = itemRow.querySelector('.item-price');
     const discountInput = itemRow.querySelector('.item-discount');
+    const suggestDropdown = itemRow.querySelector('.catalog-suggest-dropdown');
 
     const updateItemData = () => {
       item.name = nameInput.value;
       item.unit = unitInput.value;
       item.description = descInput.value;
       item.qty = parseFloat(qtyInput.value) || 0;
-      item.price = parseFloat(priceInput.value) || 0;
-      item.discount = parseFloat(discountInput.value) || 0;
+      item.price = parseThousands(priceInput.value);
+      item.discount = parseThousands(discountInput.value);
 
       const newSubtotal = (item.qty * item.price) - (item.discount || 0);
       itemRow.querySelector('.item-subtotal').textContent = formatRupiah(newSubtotal);
-      updateLivePreview();
+      if (typeof updateLivePreview === 'function') updateLivePreview();
     };
 
-    [nameInput, unitInput, descInput, qtyInput, priceInput, discountInput].forEach(inp => {
-      inp.addEventListener('input', updateItemData);
+    bindCurrencyInput(priceInput, (val) => {
+      item.price = val;
+      const newSubtotal = (item.qty * item.price) - (item.discount || 0);
+      itemRow.querySelector('.item-subtotal').textContent = formatRupiah(newSubtotal);
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+    });
+
+    bindCurrencyInput(discountInput, (val) => {
+      item.discount = val;
+      const newSubtotal = (item.qty * item.price) - (item.discount || 0);
+      itemRow.querySelector('.item-subtotal').textContent = formatRupiah(newSubtotal);
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+    });
+
+    // Show interactive suggestion dropdown from Master Catalog
+    const showSuggestions = (query = '') => {
+      const products = StorageService.getProducts();
+      if (!products || products.length === 0) {
+        suggestDropdown.classList.add('hidden');
+        return;
+      }
+
+      const q = query.trim().toLowerCase();
+      const filtered = q
+        ? products.filter(p => (p.name || '').toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q))
+        : products;
+
+      if (filtered.length === 0) {
+        suggestDropdown.classList.add('hidden');
+        return;
+      }
+
+      suggestDropdown.innerHTML = '';
+      filtered.forEach(p => {
+        const opt = document.createElement('div');
+        opt.className = 'p-2.5 hover:bg-blue-50 cursor-pointer transition flex items-center justify-between gap-3 text-left border-b border-slate-100 last:border-b-0';
+        opt.innerHTML = `
+          <div class="flex-1 min-w-0">
+            <div class="font-bold text-slate-800 text-xs">${escapeHtml(p.name)}</div>
+            ${p.description ? `<div class="text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml(p.description)}</div>` : ''}
+          </div>
+          <div class="text-right whitespace-nowrap pl-2">
+            <div class="font-bold font-mono text-blue-600 text-xs">${formatRupiah(p.price)}</div>
+            <div class="text-[10px] text-slate-400">/${escapeHtml(p.unit || 'Pcs')}</div>
+          </div>
+        `;
+
+        opt.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // Prevent blur before click executes
+          selectCatalogItem(p);
+        });
+
+        suggestDropdown.appendChild(opt);
+      });
+
+      suggestDropdown.classList.remove('hidden');
+    };
+
+    const selectCatalogItem = (p) => {
+      nameInput.value = p.name;
+      item.name = p.name;
+
+      if (p.unit) {
+        unitInput.value = p.unit;
+        item.unit = p.unit;
+      }
+      if (p.price !== undefined && p.price !== null) {
+        priceInput.value = formatThousands(p.price);
+        item.price = parseFloat(p.price) || 0;
+      }
+      if (p.description) {
+        descInput.value = p.description;
+        item.description = p.description;
+      }
+
+      suggestDropdown.classList.add('hidden');
+      const newSubtotal = (item.qty * item.price) - (item.discount || 0);
+      itemRow.querySelector('.item-subtotal').textContent = formatRupiah(newSubtotal);
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+      showToast(`Barang "${p.name}" dipilih dari katalog: Harga otomatis diisi ✓`, 'success');
+    };
+
+    if (nameInput) {
+      nameInput.addEventListener('input', () => {
+        updateItemData();
+        showSuggestions(nameInput.value);
+      });
+
+      nameInput.addEventListener('focus', () => {
+        showSuggestions(nameInput.value);
+      });
+
+      nameInput.addEventListener('blur', () => {
+        setTimeout(() => {
+          if (suggestDropdown) suggestDropdown.classList.add('hidden');
+        }, 200);
+      });
+    }
+
+    [unitInput, descInput, qtyInput].forEach(inp => {
+      if (inp) inp.addEventListener('input', updateItemData);
     });
 
     const btnDelete = itemRow.querySelector('.btn-delete-item');
     if (btnDelete) {
-      btnDelete.addEventListener('click', () => {
-        currentInvoice.items.splice(index, 1);
+      btnDelete.addEventListener('click', async () => {
+        const itemName = item.name ? item.name.trim() : '';
+        if (itemName) {
+          const ok = await showAppConfirm({
+            title: 'Hapus Rincian Barang',
+            message: `Hapus baris barang <strong>"${escapeHtml(itemName)}"</strong> dari invoice ini?`,
+            confirmText: 'Ya, Hapus',
+            cancelText: 'Batal',
+            type: 'danger',
+            icon: '🗑️'
+          });
+          if (!ok) return;
+        }
+        window.currentInvoice.items.splice(index, 1);
         renderFormItems();
-        updateLivePreview();
+        if (typeof updateLivePreview === 'function') updateLivePreview();
       });
     }
 
@@ -307,9 +411,9 @@ function renderFormItems() {
       btnDuplicate.addEventListener('click', () => {
         const copy = JSON.parse(JSON.stringify(item));
         copy.id = Date.now();
-        currentInvoice.items.splice(index + 1, 0, copy);
+        window.currentInvoice.items.splice(index + 1, 0, copy);
         renderFormItems();
-        updateLivePreview();
+        if (typeof updateLivePreview === 'function') updateLivePreview();
         showToast('Item berhasil disalin');
       });
     }
@@ -318,34 +422,46 @@ function renderFormItems() {
   });
 }
 
-// Render dynamic bank accounts in form
+/**
+ * Render dynamic bank accounts in form
+ */
 function renderFormBanks() {
   const container = document.getElementById('banks-container');
-  if (!container) return;
+  if (!container || !window.currentInvoice) return;
   container.innerHTML = '';
 
-  currentInvoice.banks.forEach((bank, index) => {
+  if (window.currentInvoice.banks.length === 0) {
+    const emptyNotice = document.createElement('div');
+    emptyNotice.className = 'text-xs text-slate-400 italic p-3 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center';
+    emptyNotice.innerHTML = 'Belum ada rekening yang dipilih untuk invoice ini. Silakan centang salah satu rekening tersimpan di atas atau klik "+ Tambah Rekening" untuk mengetik manual.';
+    container.appendChild(emptyNotice);
+    return;
+  }
+
+  window.currentInvoice.banks.forEach((bank, index) => {
     const bankRow = document.createElement('div');
     bankRow.className = 'grid grid-cols-1 md:grid-cols-12 gap-2 mb-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg items-end';
 
     bankRow.innerHTML = `
       <div class="md:col-span-4">
         <label class="form-label">Nama Bank / E-Wallet</label>
-        <input type="text" class="form-input bank-name" placeholder="BCA / Mandiri / BRI / QRIS" value="${escapeHtml(bank.bankName || '')}">
+        <input type="text" class="form-input bank-name font-semibold" placeholder="BCA / Mandiri / BRI / QRIS" value="${escapeHtml(bank.bankName || '')}">
       </div>
-      <div class="md:col-span-4">
+      <div class="md:col-span-3">
         <label class="form-label">No. Rekening / No. HP</label>
-        <input type="text" class="form-input bank-acc" placeholder="Contoh: 123-456-7890" value="${escapeHtml(bank.accountNumber || '')}">
+        <input type="text" class="form-input bank-acc font-mono" placeholder="Contoh: 123-456-7890" value="${escapeHtml(bank.accountNumber || '')}">
       </div>
       <div class="md:col-span-3">
         <label class="form-label">Atas Nama (A/N)</label>
         <input type="text" class="form-input bank-owner" placeholder="Nama Pemilik Rekening" value="${escapeHtml(bank.accountName || '')}">
       </div>
-      <div class="md:col-span-1 text-right">
-        ${currentInvoice.banks.length > 1 ? `
-        <button type="button" class="btn-delete-bank p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded" title="Hapus rekening">
+      <div class="md:col-span-2 flex items-center justify-end gap-1">
+        <button type="button" class="btn-save-bank-master p-1.5 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200 bg-white cursor-pointer" title="Simpan rekening ini ke Master Rekening">
+          💾 Simpan
+        </button>
+        <button type="button" class="btn-delete-bank p-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded border border-red-200 bg-white cursor-pointer" title="Hapus dari invoice">
           ✕
-        </button>` : ''}
+        </button>
       </div>
     `;
 
@@ -357,17 +473,50 @@ function renderFormBanks() {
       bank.bankName = nameInput.value;
       bank.accountNumber = accInput.value;
       bank.accountName = ownerInput.value;
-      updateLivePreview();
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+      if (typeof renderSavedBanksCheckboxes === 'function') renderSavedBanksCheckboxes();
     };
 
-    [nameInput, accInput, ownerInput].forEach(inp => inp.addEventListener('input', updateBank));
+    [nameInput, accInput, ownerInput].forEach(inp => {
+      if (inp) inp.addEventListener('input', updateBank);
+    });
+
+    const btnSaveMaster = bankRow.querySelector('.btn-save-bank-master');
+    if (btnSaveMaster) {
+      btnSaveMaster.addEventListener('click', () => {
+        if (!nameInput.value.trim() || !accInput.value.trim()) {
+          showToast('Nama bank dan nomor rekening wajib diisi', 'error');
+          return;
+        }
+        StorageService.saveBank({
+          bankName: nameInput.value.trim(),
+          accountNumber: accInput.value.trim(),
+          accountName: ownerInput.value.trim()
+        });
+        if (typeof renderSavedBanksCheckboxes === 'function') renderSavedBanksCheckboxes();
+        if (typeof renderBanksModalTable === 'function') renderBanksModalTable();
+        showToast('Rekening berhasil disimpan ke Master Rekening!', 'success');
+      });
+    }
 
     const btnDelete = bankRow.querySelector('.btn-delete-bank');
     if (btnDelete) {
-      btnDelete.addEventListener('click', () => {
-        currentInvoice.banks.splice(index, 1);
+      btnDelete.addEventListener('click', async () => {
+        if (bank.bankName || bank.accountNumber) {
+          const ok = await showAppConfirm({
+            title: 'Hapus Rekening',
+            message: `Hapus rekening <strong>${escapeHtml(bank.bankName || 'Bank')} ${escapeHtml(bank.accountNumber || '')}</strong> dari invoice ini?`,
+            confirmText: 'Ya, Hapus',
+            cancelText: 'Batal',
+            type: 'danger',
+            icon: '🏦'
+          });
+          if (!ok) return;
+        }
+        window.currentInvoice.banks.splice(index, 1);
         renderFormBanks();
-        updateLivePreview();
+        if (typeof renderSavedBanksCheckboxes === 'function') renderSavedBanksCheckboxes();
+        if (typeof updateLivePreview === 'function') updateLivePreview();
       });
     }
 
@@ -375,327 +524,182 @@ function renderFormBanks() {
   });
 }
 
-// Calculate financial totals
-function calculateFinancials() {
-  const inv = currentInvoice;
+/**
+ * Bind single input element to state updater
+ */
+function bindInput(id, updater) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', (e) => {
+      updater(e.target.value);
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+    });
+  }
+}
 
-  let rawSubtotal = 0;
-  inv.items.forEach(item => {
-    const itemSub = (item.qty * item.price) - (item.discount || 0);
-    rawSubtotal += Math.max(itemSub, 0);
+/**
+ * Initialize View Navigation (Builder vs Catalog vs Sales Data)
+ */
+function initViewNavigation() {
+  const tabBuilder = document.getElementById('nav-tab-builder');
+  const tabSales = document.getElementById('nav-tab-sales');
+  const tabCatalog = document.getElementById('nav-tab-catalog');
+  const btnGotoCatalog = document.getElementById('btn-goto-catalog');
+  const btnCatalogCreateInvoice = document.getElementById('btn-catalog-create-invoice');
+
+  if (tabBuilder) {
+    tabBuilder.addEventListener('click', () => switchView('builder'));
+  }
+  if (tabCatalog) {
+    tabCatalog.addEventListener('click', () => switchView('catalog'));
+  }
+  if (tabSales) {
+    tabSales.addEventListener('click', () => switchView('sales'));
+  }
+  if (btnGotoCatalog) {
+    btnGotoCatalog.addEventListener('click', () => switchView('catalog'));
+  }
+  if (btnCatalogCreateInvoice) {
+    btnCatalogCreateInvoice.addEventListener('click', () => switchView('builder'));
+  }
+}
+
+/**
+ * Switch view tabs cleanly
+ */
+function switchView(viewName) {
+  const viewBuilder = document.getElementById('view-invoice-builder');
+  const viewSales = document.getElementById('view-sales-table');
+  const viewCatalog = document.getElementById('view-catalog-manager');
+
+  const tabBuilder = document.getElementById('nav-tab-builder');
+  const tabSales = document.getElementById('nav-tab-sales');
+  const tabCatalog = document.getElementById('nav-tab-catalog');
+  const mobileToggle = document.getElementById('mobile-builder-toggle');
+
+  // Hide all views first
+  if (viewBuilder) viewBuilder.classList.add('hidden');
+  if (viewSales) {
+    viewSales.classList.add('hidden');
+    viewSales.classList.remove('flex');
+  }
+  if (viewCatalog) {
+    viewCatalog.classList.add('hidden');
+    viewCatalog.classList.remove('flex');
+  }
+
+  // Reset tab button styles
+  [tabBuilder, tabSales, tabCatalog].forEach(tab => {
+    if (tab) {
+      tab.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
+      tab.classList.add('text-slate-600');
+    }
   });
 
-  // Global Discount
-  let discountAmount = 0;
-  if (inv.globalDiscountType === 'percent') {
-    discountAmount = (rawSubtotal * (parseFloat(inv.globalDiscountValue) || 0)) / 100;
+  if (viewName === 'sales') {
+    if (viewSales) {
+      viewSales.classList.remove('hidden');
+      viewSales.classList.add('flex');
+    }
+    if (mobileToggle) mobileToggle.classList.add('hidden');
+    if (tabSales) {
+      tabSales.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
+      tabSales.classList.remove('text-slate-600');
+    }
+    if (typeof renderSalesTable === 'function') renderSalesTable();
+  } else if (viewName === 'catalog') {
+    if (viewCatalog) {
+      viewCatalog.classList.remove('hidden');
+      viewCatalog.classList.add('flex');
+    }
+    if (mobileToggle) mobileToggle.classList.add('hidden');
+    if (tabCatalog) {
+      tabCatalog.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
+      tabCatalog.classList.remove('text-slate-600');
+    }
+    if (typeof renderCatalogTableView === 'function') renderCatalogTableView();
   } else {
-    discountAmount = parseFloat(inv.globalDiscountValue) || 0;
-  }
-  discountAmount = Math.min(discountAmount, rawSubtotal);
-
-  const taxableAmount = Math.max(rawSubtotal - discountAmount, 0);
-
-  // Tax (PPN)
-  const taxRate = parseFloat(inv.taxRate) || 0;
-  const taxAmount = (taxableAmount * taxRate) / 100;
-
-  // Additional Fees
-  const shipping = parseFloat(inv.shippingFee) || 0;
-  const otherFee = parseFloat(inv.otherFee) || 0;
-
-  // Grand Total
-  const grandTotal = Math.max(taxableAmount + taxAmount + shipping + otherFee, 0);
-
-  // Down Payment & Balance Due
-  const dp = parseFloat(inv.downPayment) || 0;
-  const balanceDue = Math.max(grandTotal - dp, 0);
-
-  return {
-    subtotal: rawSubtotal,
-    discountAmount,
-    taxableAmount,
-    taxRate,
-    taxAmount,
-    shipping,
-    otherFee,
-    grandTotal,
-    downPayment: dp,
-    balanceDue
-  };
-}
-
-// Update the Live Preview Sheet on the Right Side
-function updateLivePreview() {
-  const inv = currentInvoice;
-  const totals = calculateFinancials();
-
-  // Theme application
-  document.body.setAttribute('data-theme', inv.theme || 'blue');
-
-  // Preview elements
-  const elStoreName = document.getElementById('pv-store-name');
-  const elStoreTagline = document.getElementById('pv-store-tagline');
-  const elStoreAddress = document.getElementById('pv-store-address');
-  const elStorePhone = document.getElementById('pv-store-phone');
-  const elStoreEmail = document.getElementById('pv-store-email');
-  const elStoreNpwp = document.getElementById('pv-store-npwp');
-  const elStoreLogo = document.getElementById('pv-store-logo');
-
-  if (elStoreName) elStoreName.textContent = inv.store.name || 'NAMA PERUSAHAAN / TOKO';
-  if (elStoreTagline) {
-    elStoreTagline.textContent = inv.store.tagline || '';
-    elStoreTagline.style.display = inv.store.tagline ? 'block' : 'none';
-  }
-  if (elStoreAddress) elStoreAddress.textContent = inv.store.address || '';
-  if (elStorePhone) elStorePhone.textContent = inv.store.phone ? `Telp/WA: ${inv.store.phone}` : '';
-  if (elStoreEmail) elStoreEmail.textContent = inv.store.email ? `Email: ${inv.store.email}` : '';
-  if (elStoreNpwp) {
-    elStoreNpwp.textContent = inv.store.npwp ? `NPWP: ${inv.store.npwp}` : '';
-    elStoreNpwp.style.display = inv.store.npwp ? 'block' : 'none';
-  }
-
-  // Logo
-  if (elStoreLogo) {
-    if (inv.store.logo) {
-      elStoreLogo.src = inv.store.logo;
-      elStoreLogo.classList.remove('hidden');
-    } else {
-      elStoreLogo.classList.add('hidden');
+    // Default: builder
+    if (viewBuilder) viewBuilder.classList.remove('hidden');
+    if (mobileToggle) mobileToggle.classList.remove('hidden');
+    if (tabBuilder) {
+      tabBuilder.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
+      tabBuilder.classList.remove('text-slate-600');
     }
-  }
-
-  // Invoice Meta
-  const elInvoiceNo = document.getElementById('pv-invoice-number');
-  const elDate = document.getElementById('pv-date');
-  const elDueDate = document.getElementById('pv-due-date');
-  const elStatusBadge = document.getElementById('pv-status-badge');
-  const elStamp = document.getElementById('pv-stamp-watermark');
-
-  if (elInvoiceNo) elInvoiceNo.textContent = inv.invoiceNumber || 'INV-001';
-  if (elDate) elDate.textContent = formatTanggalIndo(inv.date);
-  if (elDueDate) elDueDate.textContent = formatTanggalIndo(inv.dueDate);
-
-  // Status Styling
-  if (elStatusBadge) {
-    elStatusBadge.textContent = inv.status;
-    elStatusBadge.className = 'px-3 py-1 text-xs font-extrabold rounded-md uppercase tracking-wider inline-block';
-    
-    if (inv.status === 'LUNAS') {
-      elStatusBadge.classList.add('bg-emerald-100', 'text-emerald-800', 'border', 'border-emerald-300');
-    } else if (inv.status === 'BELUM LUNAS') {
-      elStatusBadge.classList.add('bg-amber-100', 'text-amber-800', 'border', 'border-amber-300');
-    } else if (inv.status === 'JATUH TEMPO') {
-      elStatusBadge.classList.add('bg-red-100', 'text-red-800', 'border', 'border-red-300');
-    } else {
-      elStatusBadge.classList.add('bg-blue-100', 'text-blue-800', 'border', 'border-blue-300');
-    }
-  }
-
-  // Watermark Stamp
-  if (elStamp) {
-    if (inv.showStamp) {
-      elStamp.classList.remove('hidden');
-      elStamp.textContent = inv.status;
-      elStamp.className = 'stamp-watermark';
-      if (inv.status === 'LUNAS') elStamp.classList.add('paid');
-      else if (inv.status === 'BELUM LUNAS') elStamp.classList.add('unpaid');
-      else if (inv.status === 'JATUH TEMPO') elStamp.classList.add('overdue');
-      else elStamp.classList.add('partial');
-    } else {
-      elStamp.classList.add('hidden');
-    }
-  }
-
-  // Client Info
-  const elClientName = document.getElementById('pv-client-name');
-  const elClientContact = document.getElementById('pv-client-contact');
-  const elClientPhone = document.getElementById('pv-client-phone');
-  const elClientEmail = document.getElementById('pv-client-email');
-  const elClientAddress = document.getElementById('pv-client-address');
-  const elShippingRow = document.getElementById('pv-shipping-row');
-  const elShippingAddress = document.getElementById('pv-shipping-address');
-
-  if (elClientName) elClientName.textContent = inv.client.name || 'Pelanggan / Perusahaan Klien';
-  if (elClientContact) {
-    elClientContact.textContent = inv.client.contactPerson ? `Up: ${inv.client.contactPerson}` : '';
-    elClientContact.style.display = inv.client.contactPerson ? 'block' : 'none';
-  }
-  if (elClientPhone) elClientPhone.textContent = inv.client.phone ? `No. Telp/WA: ${inv.client.phone}` : '';
-  if (elClientEmail) elClientEmail.textContent = inv.client.email ? `Email: ${inv.client.email}` : '';
-  if (elClientAddress) elClientAddress.textContent = inv.client.address || '';
-
-  if (elShippingRow && elShippingAddress) {
-    if (inv.client.shippingAddress) {
-      elShippingRow.classList.remove('hidden');
-      elShippingAddress.textContent = inv.client.shippingAddress;
-    } else {
-      elShippingRow.classList.add('hidden');
-    }
-  }
-
-  // Table Items
-  const tbody = document.getElementById('pv-table-body');
-  if (tbody) {
-    tbody.innerHTML = '';
-    inv.items.forEach((item, idx) => {
-      const itemSub = (item.qty * item.price) - (item.discount || 0);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td class="text-center font-medium text-slate-500 text-[8.5px]">${idx + 1}</td>
-        <td>
-          <div class="font-bold text-slate-800 text-[9.5px] leading-tight">${escapeHtml(item.name || '-')}</div>
-          ${item.description ? `<div class="text-[8px] text-slate-500 leading-tight mt-0.5">${escapeHtml(item.description)}</div>` : ''}
-        </td>
-        <td class="text-center font-medium text-slate-700 text-[9px] whitespace-nowrap">${item.qty} ${escapeHtml(item.unit || '')}</td>
-        <td class="text-right text-slate-700 text-[9.5px] font-mono whitespace-nowrap font-medium">${formatRupiah(item.price)}</td>
-        <td class="text-right text-slate-600 text-[9.5px] font-mono whitespace-nowrap font-medium">${item.discount ? formatRupiah(item.discount) : '-'}</td>
-        <td class="text-right font-bold text-slate-900 text-[9.5px] font-mono whitespace-nowrap">${formatRupiah(itemSub)}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-  }
-
-  // Summary Totals
-  document.getElementById('pv-subtotal').textContent = formatRupiah(totals.subtotal);
-  
-  const rowDiscount = document.getElementById('pv-discount-row');
-  if (rowDiscount) {
-    if (totals.discountAmount > 0) {
-      rowDiscount.classList.remove('hidden');
-      document.getElementById('pv-discount-val').textContent = `- ${formatRupiah(totals.discountAmount)}`;
-    } else {
-      rowDiscount.classList.add('hidden');
-    }
-  }
-
-  const rowTax = document.getElementById('pv-tax-row');
-  if (rowTax) {
-    if (totals.taxRate > 0) {
-      rowTax.classList.remove('hidden');
-      document.getElementById('pv-tax-label').textContent = `PPN (${totals.taxRate}%):`;
-      document.getElementById('pv-tax-val').textContent = formatRupiah(totals.taxAmount);
-    } else {
-      rowTax.classList.add('hidden');
-    }
-  }
-
-  const rowShipping = document.getElementById('pv-shipping-fee-row');
-  if (rowShipping) {
-    if (totals.shipping > 0) {
-      rowShipping.classList.remove('hidden');
-      document.getElementById('pv-shipping-fee-val').textContent = formatRupiah(totals.shipping);
-    } else {
-      rowShipping.classList.add('hidden');
-    }
-  }
-
-  const rowOther = document.getElementById('pv-other-fee-row');
-  if (rowOther) {
-    if (totals.otherFee > 0) {
-      rowOther.classList.remove('hidden');
-      document.getElementById('pv-other-fee-val').textContent = formatRupiah(totals.otherFee);
-    } else {
-      rowOther.classList.add('hidden');
-    }
-  }
-
-  document.getElementById('pv-grand-total').textContent = formatRupiah(totals.grandTotal);
-  document.getElementById('pv-terbilang').textContent = angkaKeTerbilang(totals.grandTotal);
-
-  // Down Payment / Balance Due Display
-  const rowDp = document.getElementById('pv-dp-row');
-  const rowBalance = document.getElementById('pv-balance-row');
-  if (rowDp && rowBalance) {
-    if (inv.status === 'DP' || totals.downPayment > 0) {
-      rowDp.classList.remove('hidden');
-      rowBalance.classList.remove('hidden');
-      document.getElementById('pv-dp-val').textContent = formatRupiah(totals.downPayment);
-      document.getElementById('pv-balance-val').textContent = formatRupiah(totals.balanceDue);
-    } else {
-      rowDp.classList.add('hidden');
-      rowBalance.classList.add('hidden');
-    }
-  }
-
-  // Banks in Preview
-  const pvBanks = document.getElementById('pv-banks-container');
-  if (pvBanks) {
-    pvBanks.innerHTML = '';
-    inv.banks.forEach(bank => {
-      if (!bank.bankName && !bank.accountNumber) return;
-      const card = document.createElement('div');
-      card.className = 'text-[9px] border-l-2 border-slate-300 pl-2 py-0.5';
-      card.innerHTML = `
-        <div class="font-bold text-slate-800 text-[9px]">${escapeHtml(bank.bankName || '')}</div>
-        <div class="font-mono text-slate-900 font-semibold tracking-wide text-[9.5px]">${escapeHtml(bank.accountNumber || '')}</div>
-        <div class="text-[8px] text-slate-500">A/N: ${escapeHtml(bank.accountName || '')}</div>
-      `;
-      pvBanks.appendChild(card);
-    });
-  }
-
-  // Notes & Terms
-  const elNotes = document.getElementById('pv-notes');
-  const elNotesBox = document.getElementById('pv-notes-box');
-  if (elNotes && elNotesBox) {
-    if (inv.notes) {
-      elNotesBox.classList.remove('hidden');
-      elNotes.textContent = inv.notes;
-    } else {
-      elNotesBox.classList.add('hidden');
-    }
-  }
-
-  const elTerms = document.getElementById('pv-terms');
-  const elTermsBox = document.getElementById('pv-terms-box');
-  if (elTerms && elTermsBox) {
-    if (inv.terms) {
-      elTermsBox.classList.remove('hidden');
-      elTerms.innerHTML = escapeHtml(inv.terms).replace(/\n/g, '<br>');
-    } else {
-      elTermsBox.classList.add('hidden');
-    }
-  }
-
-  // Signature
-  const elSignName = document.getElementById('pv-signature-name');
-  const elSignTitle = document.getElementById('pv-signature-title');
-  const elSignImg = document.getElementById('pv-signature-img');
-
-  if (elSignName) elSignName.textContent = inv.signatureName || '';
-  if (elSignTitle) elSignTitle.textContent = inv.signatureTitle || '';
-  
-  if (elSignImg) {
-    if (inv.signatureImage) {
-      elSignImg.src = inv.signatureImage;
-      elSignImg.classList.remove('hidden');
-    } else {
-      elSignImg.classList.add('hidden');
-    }
+    if (typeof updateLivePreview === 'function') updateLivePreview();
   }
 }
 
-// Setup Event Listeners
+/**
+ * Validate invoice number for uniqueness and completeness
+ * Turns input red and shows warning if duplicate
+ */
+function validateInvoiceNumber() {
+  const input = document.getElementById('input-invoice-number');
+  const errorEl = document.getElementById('invoice-no-error');
+  if (!input) return true;
+
+  const currentNo = (input.value || '').trim();
+  const currentId = window.currentInvoice?.id || null;
+
+  if (!currentNo) {
+    input.classList.add('border-rose-500', 'text-rose-600', 'bg-rose-50/50');
+    input.classList.remove('border-slate-300', 'text-slate-900');
+    if (errorEl) {
+      errorEl.innerHTML = '<span>⚠️</span> <span>Nomor invoice wajib diisi!</span>';
+      errorEl.classList.remove('hidden');
+    }
+    return false;
+  }
+
+  const isDuplicate = StorageService.isInvoiceNumberDuplicate(currentNo, currentId);
+  if (isDuplicate) {
+    input.classList.add('border-rose-500', 'text-rose-600', 'bg-rose-50/50');
+    input.classList.remove('border-slate-300', 'text-slate-900');
+    if (errorEl) {
+      errorEl.innerHTML = '<span>⚠️</span> <span>Nomor invoice ini sudah digunakan! Silakan gunakan nomor lain.</span>';
+      errorEl.classList.remove('hidden');
+    }
+    return false;
+  } else {
+    input.classList.remove('border-rose-500', 'text-rose-600', 'bg-rose-50/50');
+    input.classList.add('border-slate-300');
+    if (errorEl) {
+      errorEl.classList.add('hidden');
+    }
+    return true;
+  }
+}
+
+/**
+ * Setup All Event Listeners for Invoice Builder Form
+ */
 function setupEventListeners() {
   // Theme selector
   const themeSelect = document.getElementById('input-theme');
   if (themeSelect) {
     themeSelect.addEventListener('change', (e) => {
-      currentInvoice.theme = e.target.value;
-      updateLivePreview();
+      if (window.currentInvoice) window.currentInvoice.theme = e.target.value;
+      if (typeof updateLivePreview === 'function') updateLivePreview();
     });
   }
 
   // Meta inputs
-  bindInput('input-invoice-number', (val) => currentInvoice.invoiceNumber = val);
-  bindInput('input-date', (val) => currentInvoice.date = val);
-  bindInput('input-due-date', (val) => currentInvoice.dueDate = val);
-  
+  const inputInvNo = document.getElementById('input-invoice-number');
+  if (inputInvNo) {
+    inputInvNo.addEventListener('input', (e) => {
+      if (window.currentInvoice) window.currentInvoice.invoiceNumber = e.target.value;
+      validateInvoiceNumber();
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+    });
+  }
+  bindInput('input-date', (val) => { if (window.currentInvoice) window.currentInvoice.date = val; });
+  bindInput('input-due-date', (val) => { if (window.currentInvoice) window.currentInvoice.dueDate = val; });
+
   const statusSelect = document.getElementById('input-status');
   if (statusSelect) {
     statusSelect.addEventListener('change', (e) => {
-      currentInvoice.status = e.target.value;
+      if (window.currentInvoice) window.currentInvoice.status = e.target.value;
       const dpContainer = document.getElementById('dp-input-container');
       if (dpContainer) {
         if (e.target.value === 'DP') {
@@ -704,7 +708,7 @@ function setupEventListeners() {
           dpContainer.classList.add('hidden');
         }
       }
-      updateLivePreview();
+      if (typeof updateLivePreview === 'function') updateLivePreview();
     });
   }
 
@@ -712,21 +716,28 @@ function setupEventListeners() {
   const btnGenNo = document.getElementById('btn-generate-no');
   if (btnGenNo) {
     btnGenNo.addEventListener('click', () => {
-      const newNo = generateInvoiceNumber();
-      document.getElementById('input-invoice-number').value = newNo;
-      currentInvoice.invoiceNumber = newNo;
-      updateLivePreview();
-      showToast('Nomor invoice baru dibuat');
+      let newNo = generateInvoiceNumber();
+      let attempts = 0;
+      while (StorageService.isInvoiceNumberDuplicate(newNo, window.currentInvoice?.id) && attempts < 50) {
+        newNo = generateInvoiceNumber();
+        attempts++;
+      }
+      const elInvNo = document.getElementById('input-invoice-number');
+      if (elInvNo) elInvNo.value = newNo;
+      if (window.currentInvoice) window.currentInvoice.invoiceNumber = newNo;
+      validateInvoiceNumber();
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+      showToast('Nomor invoice unik berhasil dibuat');
     });
   }
 
   // Store profile inputs
-  bindInput('input-store-name', (val) => currentInvoice.store.name = val);
-  bindInput('input-store-tagline', (val) => currentInvoice.store.tagline = val);
-  bindInput('input-store-address', (val) => currentInvoice.store.address = val);
-  bindInput('input-store-phone', (val) => currentInvoice.store.phone = val);
-  bindInput('input-store-email', (val) => currentInvoice.store.email = val);
-  bindInput('input-store-npwp', (val) => currentInvoice.store.npwp = val);
+  bindInput('input-store-name', (val) => { if (window.currentInvoice) window.currentInvoice.store.name = val; });
+  bindInput('input-store-tagline', (val) => { if (window.currentInvoice) window.currentInvoice.store.tagline = val; });
+  bindInput('input-store-address', (val) => { if (window.currentInvoice) window.currentInvoice.store.address = val; });
+  bindInput('input-store-phone', (val) => { if (window.currentInvoice) window.currentInvoice.store.phone = val; });
+  bindInput('input-store-email', (val) => { if (window.currentInvoice) window.currentInvoice.store.email = val; });
+  bindInput('input-store-npwp', (val) => { if (window.currentInvoice) window.currentInvoice.store.npwp = val; });
 
   // Logo file upload
   const logoInput = document.getElementById('input-store-logo');
@@ -740,10 +751,12 @@ function setupEventListeners() {
         }
         const reader = new FileReader();
         reader.onload = (event) => {
-          currentInvoice.store.logo = event.target.result;
-          document.getElementById('logo-preview-img').src = event.target.result;
-          document.getElementById('logo-preview-container').classList.remove('hidden');
-          updateLivePreview();
+          if (window.currentInvoice) window.currentInvoice.store.logo = event.target.result;
+          const logoPreviewImg = document.getElementById('logo-preview-img');
+          const logoPreviewContainer = document.getElementById('logo-preview-container');
+          if (logoPreviewImg) logoPreviewImg.src = event.target.result;
+          if (logoPreviewContainer) logoPreviewContainer.classList.remove('hidden');
+          if (typeof updateLivePreview === 'function') updateLivePreview();
           showToast('Logo berhasil diunggah');
         };
         reader.readAsDataURL(file);
@@ -755,10 +768,12 @@ function setupEventListeners() {
   const btnRemoveLogo = document.getElementById('btn-remove-logo');
   if (btnRemoveLogo) {
     btnRemoveLogo.addEventListener('click', () => {
-      currentInvoice.store.logo = '';
-      document.getElementById('input-store-logo').value = '';
-      document.getElementById('logo-preview-container').classList.add('hidden');
-      updateLivePreview();
+      if (window.currentInvoice) window.currentInvoice.store.logo = '';
+      const inputStoreLogo = document.getElementById('input-store-logo');
+      if (inputStoreLogo) inputStoreLogo.value = '';
+      const logoPreviewContainer = document.getElementById('logo-preview-container');
+      if (logoPreviewContainer) logoPreviewContainer.classList.add('hidden');
+      if (typeof updateLivePreview === 'function') updateLivePreview();
       showToast('Logo dihapus');
     });
   }
@@ -767,24 +782,27 @@ function setupEventListeners() {
   const btnSaveDefaultStore = document.getElementById('btn-save-default-store');
   if (btnSaveDefaultStore) {
     btnSaveDefaultStore.addEventListener('click', () => {
-      StorageService.saveStoreProfile(currentInvoice.store);
-      showToast('Profil toko berhasil disimpan sebagai default!');
+      if (window.currentInvoice) {
+        StorageService.saveStoreProfile(window.currentInvoice.store);
+        showToast('Profil toko berhasil disimpan sebagai default!');
+      }
     });
   }
 
   // Client inputs
-  bindInput('input-client-name', (val) => currentInvoice.client.name = val);
-  bindInput('input-client-contact', (val) => currentInvoice.client.contactPerson = val);
-  bindInput('input-client-phone', (val) => currentInvoice.client.phone = val);
-  bindInput('input-client-email', (val) => currentInvoice.client.email = val);
-  bindInput('input-client-address', (val) => currentInvoice.client.address = val);
-  bindInput('input-shipping-address', (val) => currentInvoice.client.shippingAddress = val);
+  bindInput('input-client-name', (val) => { if (window.currentInvoice) window.currentInvoice.client.name = val; });
+  bindInput('input-client-contact', (val) => { if (window.currentInvoice) window.currentInvoice.client.contactPerson = val; });
+  bindInput('input-client-phone', (val) => { if (window.currentInvoice) window.currentInvoice.client.phone = val; });
+  bindInput('input-client-email', (val) => { if (window.currentInvoice) window.currentInvoice.client.email = val; });
+  bindInput('input-client-address', (val) => { if (window.currentInvoice) window.currentInvoice.client.address = val; });
+  bindInput('input-shipping-address', (val) => { if (window.currentInvoice) window.currentInvoice.client.shippingAddress = val; });
 
-  // Add Item Button
+  // Add Item Button (Positioned directly below the last item card)
   const btnAddItem = document.getElementById('btn-add-item');
   if (btnAddItem) {
     btnAddItem.addEventListener('click', () => {
-      currentInvoice.items.push({
+      if (!window.currentInvoice) return;
+      window.currentInvoice.items.push({
         id: Date.now(),
         name: '',
         description: '',
@@ -794,63 +812,128 @@ function setupEventListeners() {
         discount: 0
       });
       renderFormItems();
-      updateLivePreview();
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+
+      // Automatically focus on the newly added item's name input
+      const allItemInputs = document.querySelectorAll('#items-container .item-name');
+      if (allItemInputs.length > 0) {
+        const lastInput = allItemInputs[allItemInputs.length - 1];
+        lastInput.focus();
+        lastInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     });
   }
 
-  // Financial inputs
-  bindInput('input-discount-type', (val) => {
-    currentInvoice.globalDiscountType = val;
-    updateLivePreview();
-  });
-  bindInput('input-discount-val', (val) => {
-    currentInvoice.globalDiscountValue = parseFloat(val) || 0;
-    updateLivePreview();
-  });
+  // Financial inputs with thousands separator format
+  const discTypeSelect = document.getElementById('input-discount-type');
+  const discValInput = document.getElementById('input-discount-val');
+  const shipInput = document.getElementById('input-shipping-fee');
+  const otherInput = document.getElementById('input-other-fee');
+  const dpInput = document.getElementById('input-down-payment');
+
+  if (discTypeSelect) {
+    discTypeSelect.addEventListener('change', (e) => {
+      if (window.currentInvoice) window.currentInvoice.globalDiscountType = e.target.value;
+      if (discValInput && window.currentInvoice) {
+        if (e.target.value === 'percent') {
+          discValInput.value = window.currentInvoice.globalDiscountValue > 100 ? 100 : window.currentInvoice.globalDiscountValue;
+        } else {
+          discValInput.value = formatThousands(window.currentInvoice.globalDiscountValue || 0);
+        }
+      }
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+    });
+  }
+
+  if (discValInput) {
+    bindCurrencyInput(
+      discValInput,
+      (val) => {
+        if (window.currentInvoice) window.currentInvoice.globalDiscountValue = val;
+        if (typeof updateLivePreview === 'function') updateLivePreview();
+      },
+      () => window.currentInvoice && window.currentInvoice.globalDiscountType === 'percent'
+    );
+  }
+
   bindInput('input-tax-rate', (val) => {
-    currentInvoice.taxRate = parseFloat(val) || 0;
-    updateLivePreview();
+    if (window.currentInvoice) window.currentInvoice.taxRate = parseFloat(val) || 0;
+    if (typeof updateLivePreview === 'function') updateLivePreview();
   });
-  bindInput('input-shipping-fee', (val) => {
-    currentInvoice.shippingFee = parseFloat(val) || 0;
-    updateLivePreview();
-  });
-  bindInput('input-other-fee', (val) => {
-    currentInvoice.otherFee = parseFloat(val) || 0;
-    updateLivePreview();
-  });
-  bindInput('input-down-payment', (val) => {
-    currentInvoice.downPayment = parseFloat(val) || 0;
-    updateLivePreview();
-  });
+
+  if (shipInput) {
+    bindCurrencyInput(shipInput, (val) => {
+      if (window.currentInvoice) window.currentInvoice.shippingFee = val;
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+    });
+  }
+
+  if (otherInput) {
+    bindCurrencyInput(otherInput, (val) => {
+      if (window.currentInvoice) window.currentInvoice.otherFee = val;
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+    });
+  }
+
+  if (dpInput) {
+    bindCurrencyInput(dpInput, (val) => {
+      if (window.currentInvoice) window.currentInvoice.downPayment = val;
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+    });
+  }
 
   // Add Bank Button
   const btnAddBank = document.getElementById('btn-add-bank');
   if (btnAddBank) {
     btnAddBank.addEventListener('click', () => {
-      currentInvoice.banks.push({
+      if (!window.currentInvoice) return;
+      window.currentInvoice.banks.push({
         bankName: '',
         accountNumber: '',
-        accountName: currentInvoice.store.name || ''
+        accountName: window.currentInvoice.store.name || ''
       });
       renderFormBanks();
-      updateLivePreview();
+      if (typeof updateLivePreview === 'function') updateLivePreview();
     });
   }
 
   // Notes & Terms
-  bindInput('input-notes', (val) => currentInvoice.notes = val);
-  bindInput('input-terms', (val) => currentInvoice.terms = val);
+  bindInput('input-notes', (val) => { if (window.currentInvoice) window.currentInvoice.notes = val; });
+  bindInput('input-terms', (val) => { if (window.currentInvoice) window.currentInvoice.terms = val; });
+
+  const btnResetNotes = document.getElementById('btn-reset-default-notes');
+  if (btnResetNotes) {
+    btnResetNotes.addEventListener('click', () => {
+      const defNotes = typeof DEFAULT_NOTES !== 'undefined' ? DEFAULT_NOTES : 'Terima kasih atas kepercayaan Anda bertransaksi dengan kami. Mohon periksa kembali kondisi barang saat serah terima.';
+      if (window.currentInvoice) window.currentInvoice.notes = defNotes;
+      const elNotes = document.getElementById('input-notes');
+      if (elNotes) elNotes.value = defNotes;
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+      showToast('Catatan dikembalikan ke teks standar');
+    });
+  }
+
+  const btnResetTerms = document.getElementById('btn-reset-default-terms');
+  if (btnResetTerms) {
+    btnResetTerms.addEventListener('click', () => {
+      const defTerms = typeof DEFAULT_TERMS !== 'undefined' ? DEFAULT_TERMS : '1. Pembayaran sah apabila dana sudah masuk ke rekening yang tertera di atas.\n2. Bukti transfer mohon dikonfirmasikan via WhatsApp.';
+      if (window.currentInvoice) window.currentInvoice.terms = defTerms;
+      const elTerms = document.getElementById('input-terms');
+      if (elTerms) elTerms.value = defTerms;
+      if (typeof updateLivePreview === 'function') updateLivePreview();
+      showToast('Syarat & Ketentuan dikembalikan ke teks standar');
+    });
+  }
 
   // Signature inputs
-  bindInput('input-signature-name', (val) => currentInvoice.signatureName = val);
-  bindInput('input-signature-title', (val) => currentInvoice.signatureTitle = val);
-  
+  bindInput('input-signature-name', (val) => { if (window.currentInvoice) window.currentInvoice.signatureName = val; });
+  bindInput('input-signature-title', (val) => { if (window.currentInvoice) window.currentInvoice.signatureTitle = val; });
+
   const checkStamp = document.getElementById('input-show-stamp');
   if (checkStamp) {
     checkStamp.addEventListener('change', (e) => {
-      currentInvoice.showStamp = e.target.checked;
-      updateLivePreview();
+      if (window.currentInvoice) window.currentInvoice.showStamp = e.target.checked;
+      if (typeof updateLivePreview === 'function') updateLivePreview();
     });
   }
 
@@ -864,16 +947,18 @@ function setupEventListeners() {
   if (btnOpenSig && modalSig) {
     btnOpenSig.addEventListener('click', () => {
       modalSig.classList.remove('hidden');
-      if (signaturePad) {
+      if (window.signaturePad) {
         setTimeout(() => {
           const canvas = document.getElementById('signature-canvas');
-          const ratio = Math.max(window.devicePixelRatio || 1, 1);
-          canvas.width = canvas.offsetWidth * ratio;
-          canvas.height = canvas.offsetHeight * ratio;
-          canvas.getContext("2d").scale(ratio, ratio);
-          signaturePad.clear();
-          if (currentInvoice.signatureImage) {
-            signaturePad.fromDataURL(currentInvoice.signatureImage);
+          if (canvas) {
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = canvas.offsetWidth * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            window.signaturePad.clear();
+            if (window.currentInvoice && window.currentInvoice.signatureImage) {
+              window.signaturePad.fromDataURL(window.currentInvoice.signatureImage);
+            }
           }
         }, 100);
       }
@@ -884,20 +969,20 @@ function setupEventListeners() {
     btnCloseSig.addEventListener('click', () => modalSig.classList.add('hidden'));
   }
 
-  if (btnClearSig && signaturePad) {
-    btnClearSig.addEventListener('click', () => signaturePad.clear());
+  if (btnClearSig && window.signaturePad) {
+    btnClearSig.addEventListener('click', () => window.signaturePad.clear());
   }
 
-  if (btnSaveSig && signaturePad) {
+  if (btnSaveSig && window.signaturePad) {
     btnSaveSig.addEventListener('click', () => {
-      if (!signaturePad.isEmpty()) {
-        currentInvoice.signatureImage = signaturePad.toDataURL('image/png');
+      if (!window.signaturePad.isEmpty()) {
+        window.currentInvoice.signatureImage = window.signaturePad.toDataURL('image/png');
         showToast('Tanda tangan digital berhasil disimpan');
       } else {
-        currentInvoice.signatureImage = '';
+        window.currentInvoice.signatureImage = '';
       }
       modalSig.classList.add('hidden');
-      updateLivePreview();
+      if (typeof updateLivePreview === 'function') updateLivePreview();
     });
   }
 
@@ -909,8 +994,8 @@ function setupEventListeners() {
       if (file) {
         const reader = new FileReader();
         reader.onload = (event) => {
-          currentInvoice.signatureImage = event.target.result;
-          updateLivePreview();
+          if (window.currentInvoice) window.currentInvoice.signatureImage = event.target.result;
+          if (typeof updateLivePreview === 'function') updateLivePreview();
           showToast('Gambar tanda tangan/stempel diunggah');
         };
         reader.readAsDataURL(file);
@@ -923,7 +1008,7 @@ function setupEventListeners() {
   if (btnDownloadPDF) {
     btnDownloadPDF.addEventListener('click', async () => {
       const element = document.getElementById('invoice-preview-sheet');
-      if (!element) return;
+      if (!element || !window.currentInvoice) return;
 
       const originalText = btnDownloadPDF.innerHTML;
       btnDownloadPDF.disabled = true;
@@ -933,8 +1018,8 @@ function setupEventListeners() {
 
       try {
         await PDFExportService.exportToPDF(element, {
-          invoiceNumber: currentInvoice.invoiceNumber,
-          clientName: currentInvoice.client.name
+          invoiceNumber: window.currentInvoice.invoiceNumber,
+          clientName: window.currentInvoice.client.name
         });
         showToast('PDF berhasil diunduh!');
       } catch (err) {
@@ -960,14 +1045,33 @@ function setupEventListeners() {
   // Save Invoice Action
   const btnSaveInvoice = document.getElementById('btn-save-invoice');
   if (btnSaveInvoice) {
-    btnSaveInvoice.addEventListener('click', () => {
-      const success = StorageService.saveInvoice(currentInvoice);
+    btnSaveInvoice.addEventListener('click', async () => {
+      if (!window.currentInvoice) return;
+
+      // Validate invoice number uniqueness & completeness
+      if (!validateInvoiceNumber()) {
+        const inputInvNo = document.getElementById('input-invoice-number');
+        if (inputInvNo) {
+          inputInvNo.focus();
+          inputInvNo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        await showAppAlert({
+          title: 'Nomor Invoice Duplikat!',
+          message: `Nomor invoice <strong>"${escapeHtml(window.currentInvoice.invoiceNumber || '')}"</strong> sudah terdaftar pada riwayat penjualan! Mohon ganti nomor invoice atau klik tombol acak 🎲 agar data transaksi tidak tertukar.`,
+          buttonText: 'Perbaiki Nomor',
+          type: 'danger',
+          icon: '⚠️'
+        });
+        return;
+      }
+
+      const success = StorageService.saveInvoice(window.currentInvoice);
       if (success) {
         showToast('Invoice berhasil disimpan ke data penjualan!');
-        renderHistoryTable();
-        renderSalesTable();
+        if (typeof renderHistoryTable === 'function') renderHistoryTable();
+        if (typeof renderSalesTable === 'function') renderSalesTable();
       } else {
-        showToast('Gagal menyimpan invoice', 'error');
+        showToast('Gagal menyimpan invoice: Nomor invoice sudah terdaftar', 'error');
       }
     });
   }
@@ -975,23 +1079,22 @@ function setupEventListeners() {
   // New Invoice Action
   const btnNewInvoice = document.getElementById('btn-new-invoice');
   if (btnNewInvoice) {
-    btnNewInvoice.addEventListener('click', () => {
-      if (confirm('Buat invoice baru? Formulir akan diatur ulang (data toko Anda tetap disimpan).')) {
-        const savedStore = StorageService.getStoreProfile() || currentInvoice.store;
-        currentInvoice = {
-          ...JSON.parse(JSON.stringify(window.DEFAULT_SAMPLE_DATA)),
-          id: 'INV-' + Date.now(),
-          invoiceNumber: generateInvoiceNumber(),
-          date: new Date().toISOString().split('T')[0],
-          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          status: 'BELUM LUNAS',
-          store: savedStore,
-          client: { name: '', contactPerson: '', phone: '', email: '', address: '', shippingAddress: '' },
-          items: [{ id: Date.now(), name: '', description: '', qty: 1, unit: 'Pcs', price: 0, discount: 0 }],
-          downPayment: 0
-        };
+    btnNewInvoice.addEventListener('click', async () => {
+      const ok = await showAppConfirm({
+        title: 'Buat Invoice Baru',
+        message: 'Apakah Anda yakin ingin membuat invoice baru? Formulir rincian barang dan pelanggan akan dikosongkan (data profil toko Anda tetap aman tersimpan).',
+        confirmText: 'Ya, Buat Baru',
+        cancelText: 'Batal',
+        type: 'primary',
+        icon: '📄'
+      });
+      if (ok) {
+        window.currentInvoice = StorageService.getBlankInvoice();
         populateFormFromState();
-        updateLivePreview();
+        if (typeof renderSavedBanksCheckboxes === 'function') renderSavedBanksCheckboxes();
+        const selClient = document.getElementById('select-saved-client');
+        if (selClient) selClient.value = '';
+        if (typeof updateLivePreview === 'function') updateLivePreview();
         showToast('Formulir invoice baru siap digunakan');
       }
     });
@@ -1004,7 +1107,7 @@ function setupEventListeners() {
 
   if (btnOpenHistory && modalHistory) {
     btnOpenHistory.addEventListener('click', () => {
-      renderHistoryTable();
+      if (typeof renderHistoryTable === 'function') renderHistoryTable();
       modalHistory.classList.remove('hidden');
     });
   }
@@ -1032,7 +1135,7 @@ function setupEventListeners() {
           const ok = StorageService.importDataJSON(event.target.result);
           if (ok) {
             showToast('Data berhasil dipulihkan!');
-            renderHistoryTable();
+            if (typeof renderHistoryTable === 'function') renderHistoryTable();
             location.reload();
           } else {
             showToast('Format file cadangan tidak valid', 'error');
@@ -1041,52 +1144,6 @@ function setupEventListeners() {
         reader.readAsText(file);
       }
     });
-  }
-
-  // Zoom controls
-  const btnZoomIn = document.getElementById('btn-zoom-in');
-  const btnZoomOut = document.getElementById('btn-zoom-out');
-  const btnZoomReset = document.getElementById('btn-zoom-reset');
-  const sheet = document.getElementById('invoice-preview-sheet');
-
-  function autoFitZoom() {
-    const container = document.querySelector('.invoice-sheet-container');
-    if (!container || !sheet) return;
-    const availWidth = container.clientWidth - 48; // padding buffer
-    if (availWidth > 0 && availWidth < 794) {
-      currentZoom = Math.min(Math.max(availWidth / 794, 0.4), 1);
-    } else {
-      currentZoom = 1;
-    }
-    applyZoom();
-  }
-
-  if (btnZoomIn && sheet) {
-    btnZoomIn.addEventListener('click', () => {
-      currentZoom = Math.min(currentZoom + 0.1, 1.4);
-      applyZoom();
-    });
-  }
-  if (btnZoomOut && sheet) {
-    btnZoomOut.addEventListener('click', () => {
-      currentZoom = Math.max(currentZoom - 0.1, 0.4);
-      applyZoom();
-    });
-  }
-  if (btnZoomReset && sheet) {
-    btnZoomReset.addEventListener('click', autoFitZoom);
-  }
-
-  // Auto-fit on initial load and window resize
-  window.addEventListener('resize', autoFitZoom);
-  setTimeout(autoFitZoom, 400);
-
-  function applyZoom() {
-    if (sheet) {
-      sheet.style.transform = `scale(${currentZoom})`;
-      const zoomText = document.getElementById('zoom-percentage');
-      if (zoomText) zoomText.textContent = `${Math.round(currentZoom * 100)}%`;
-    }
   }
 
   // Mobile View Toggle: Form vs Preview
@@ -1112,552 +1169,18 @@ function setupEventListeners() {
       tabForm.classList.add('text-slate-600');
       colPreview.classList.remove('hidden');
       colForm.classList.add('hidden');
-      updateLivePreview();
-    });
-  }
-
-  // Sales View Filter & Action Listeners
-  const salesSearchInput = document.getElementById('sales-search-input');
-  if (salesSearchInput) {
-    salesSearchInput.addEventListener('input', () => renderSalesTable());
-  }
-
-  const salesFilterStatus = document.getElementById('sales-filter-status');
-  if (salesFilterStatus) {
-    salesFilterStatus.addEventListener('change', () => renderSalesTable());
-  }
-
-  const salesFilterSort = document.getElementById('sales-filter-sort');
-  if (salesFilterSort) {
-    salesFilterSort.addEventListener('change', () => renderSalesTable());
-  }
-
-  const btnExportSalesCSV = document.getElementById('btn-export-sales-csv');
-  if (btnExportSalesCSV) {
-    btnExportSalesCSV.addEventListener('click', exportSalesToCSV);
-  }
-
-  const btnPrintSalesTable = document.getElementById('btn-print-sales-table');
-  if (btnPrintSalesTable) {
-    btnPrintSalesTable.addEventListener('click', printSalesReport);
-  }
-
-  const btnCreateFromSales = document.getElementById('btn-create-invoice-from-sales');
-  if (btnCreateFromSales) {
-    btnCreateFromSales.addEventListener('click', createNewInvoiceFromSales);
-  }
-}
-
-// Bind single input to state
-function bindInput(id, updater) {
-  const el = document.getElementById(id);
-  if (el) {
-    el.addEventListener('input', (e) => {
-      updater(e.target.value);
-      updateLivePreview();
+      if (typeof updateLivePreview === 'function') updateLivePreview();
     });
   }
 }
 
-// Render History Table
-function renderHistoryTable() {
-  const tbody = document.getElementById('history-table-body');
-  if (!tbody) return;
-
-  const invoices = StorageService.getAllInvoices();
-  tbody.innerHTML = '';
-
-  if (invoices.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="6" class="text-center py-8 text-slate-400">
-          Belum ada riwayat invoice tersimpan. Klik "Simpan Invoice" untuk menyimpan invoice yang sedang dibuat.
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  invoices.forEach(inv => {
-    const tr = document.createElement('tr');
-    tr.className = 'border-b border-slate-100 hover:bg-slate-50 transition-colors';
-
-    let totalAmount = 0;
-    if (inv.items) {
-      inv.items.forEach(it => totalAmount += ((it.qty * it.price) - (it.discount || 0)));
-    }
-
-    tr.innerHTML = `
-      <td class="py-3 px-3 font-semibold text-slate-800">${escapeHtml(inv.invoiceNumber || '-')}</td>
-      <td class="py-3 px-3 text-slate-600">${escapeHtml(inv.client?.name || '-')}</td>
-      <td class="py-3 px-3 text-slate-500">${formatTanggalIndo(inv.date)}</td>
-      <td class="py-3 px-3 font-bold text-slate-800">${formatRupiah(totalAmount)}</td>
-      <td class="py-3 px-3">
-        <span class="text-xs px-2 py-0.5 rounded font-bold uppercase ${inv.status === 'LUNAS' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
-          ${inv.status}
-        </span>
-      </td>
-      <td class="py-3 px-3 text-right space-x-1">
-        <button class="btn-load-inv px-2.5 py-1 text-xs bg-blue-50 text-blue-600 font-semibold rounded hover:bg-blue-100 transition-colors" data-id="${inv.id}">
-          Buka
-        </button>
-        <button class="btn-delete-inv px-2.5 py-1 text-xs bg-red-50 text-red-600 font-semibold rounded hover:bg-red-100 transition-colors" data-id="${inv.id}">
-          Hapus
-        </button>
-      </td>
-    `;
-
-    tr.querySelector('.btn-load-inv').addEventListener('click', () => {
-      currentInvoice = JSON.parse(JSON.stringify(inv));
-      populateFormFromState();
-      updateLivePreview();
-      document.getElementById('modal-history').classList.add('hidden');
-      showToast(`Invoice ${inv.invoiceNumber} berhasil dibuka`);
-    });
-
-    tr.querySelector('.btn-delete-inv').addEventListener('click', () => {
-      if (confirm(`Hapus invoice ${inv.invoiceNumber}?`)) {
-        StorageService.deleteInvoice(inv.id);
-        renderHistoryTable();
-        showToast('Invoice dihapus dari riwayat');
-      }
-    });
-
-    tbody.appendChild(tr);
-  });
-}
-
-// Escape HTML utility
-function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-/* ========================================================
-   SALES DATA TABLE & DASHBOARD CONTROLLER
-   ======================================================== */
-
-// Initialize View Navigation (Builder vs Sales Data)
-function initViewNavigation() {
-  const tabBuilder = document.getElementById('nav-tab-builder');
-  const tabSales = document.getElementById('nav-tab-sales');
-
-  if (tabBuilder) {
-    tabBuilder.addEventListener('click', () => switchView('builder'));
-  }
-  if (tabSales) {
-    tabSales.addEventListener('click', () => switchView('sales'));
-  }
-}
-
-// Switch between Builder View and Sales Table View
-function switchView(viewName) {
-  const viewBuilder = document.getElementById('view-invoice-builder');
-  const viewSales = document.getElementById('view-sales-table');
-  const tabBuilder = document.getElementById('nav-tab-builder');
-  const tabSales = document.getElementById('nav-tab-sales');
-  const mobileToggle = document.getElementById('mobile-builder-toggle');
-
-  if (viewName === 'sales') {
-    if (viewBuilder) viewBuilder.classList.add('hidden');
-    if (viewSales) {
-      viewSales.classList.remove('hidden');
-      viewSales.classList.add('flex');
-    }
-    if (mobileToggle) mobileToggle.classList.add('hidden');
-
-    if (tabBuilder) {
-      tabBuilder.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
-      tabBuilder.classList.add('text-slate-600');
-    }
-    if (tabSales) {
-      tabSales.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
-      tabSales.classList.remove('text-slate-600');
-    }
-
-    renderSalesTable();
-  } else {
-    if (viewSales) {
-      viewSales.classList.add('hidden');
-      viewSales.classList.remove('flex');
-    }
-    if (viewBuilder) viewBuilder.classList.remove('hidden');
-    if (mobileToggle) mobileToggle.classList.remove('hidden');
-
-    if (tabSales) {
-      tabSales.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
-      tabSales.classList.add('text-slate-600');
-    }
-    if (tabBuilder) {
-      tabBuilder.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
-      tabBuilder.classList.remove('text-slate-600');
-    }
-
-    updateLivePreview();
-  }
-}
-
-// Helper to calculate total for any arbitrary invoice object
-function calculateInvoiceTotal(inv) {
-  if (!inv) return 0;
-  let rawSubtotal = 0;
-  if (Array.isArray(inv.items)) {
-    inv.items.forEach(it => {
-      const q = parseFloat(it.qty) || 0;
-      const p = parseFloat(it.price) || 0;
-      const d = parseFloat(it.discount) || 0;
-      rawSubtotal += Math.max((q * p) - d, 0);
-    });
-  }
-
-  let discountAmount = 0;
-  if (inv.globalDiscountType === 'percent') {
-    discountAmount = (rawSubtotal * (parseFloat(inv.globalDiscountValue) || 0)) / 100;
-  } else {
-    discountAmount = parseFloat(inv.globalDiscountValue) || 0;
-  }
-  discountAmount = Math.min(discountAmount, rawSubtotal);
-
-  const taxableAmount = Math.max(rawSubtotal - discountAmount, 0);
-  const taxRate = parseFloat(inv.taxRate) || 0;
-  const taxAmount = (taxableAmount * taxRate) / 100;
-
-  const shipping = parseFloat(inv.shippingFee) || 0;
-  const otherFee = parseFloat(inv.otherFee) || 0;
-
-  return Math.max(taxableAmount + taxAmount + shipping + otherFee, 0);
-}
-
-// Update Top Metric Cards (KPIs)
-function updateSalesKPIs(invoices) {
-  let totalRevenue = 0;
-  let paidRevenue = 0;
-  let unpaidRevenue = 0;
-  let paidCount = 0;
-  let unpaidCount = 0;
-
-  invoices.forEach(inv => {
-    const total = calculateInvoiceTotal(inv);
-    totalRevenue += total;
-
-    if (inv.status === 'LUNAS') {
-      paidRevenue += total;
-      paidCount++;
-    } else {
-      unpaidRevenue += total;
-      unpaidCount++;
-    }
-  });
-
-  const totalCount = invoices.length;
-  const avgRevenue = totalCount > 0 ? (totalRevenue / totalCount) : 0;
-
-  const elTotalRev = document.getElementById('kpi-total-revenue');
-  const elTotalCnt = document.getElementById('kpi-total-count');
-  const elPaidRev = document.getElementById('kpi-paid-revenue');
-  const elPaidCnt = document.getElementById('kpi-paid-count');
-  const elUnpaidRev = document.getElementById('kpi-unpaid-revenue');
-  const elUnpaidCnt = document.getElementById('kpi-unpaid-count');
-  const elAvgRev = document.getElementById('kpi-avg-revenue');
-  const elBadgeCnt = document.getElementById('sales-badge-count');
-
-  if (elTotalRev) elTotalRev.textContent = formatRupiah(totalRevenue);
-  if (elTotalCnt) elTotalCnt.textContent = `${totalCount} Transaksi`;
-  if (elPaidRev) elPaidRev.textContent = formatRupiah(paidRevenue);
-  if (elPaidCnt) elPaidCnt.textContent = `${paidCount} Transaksi Lunas`;
-  if (elUnpaidRev) elUnpaidRev.textContent = formatRupiah(unpaidRevenue);
-  if (elUnpaidCnt) elUnpaidCnt.textContent = `${unpaidCount} Transaksi`;
-  if (elAvgRev) elAvgRev.textContent = formatRupiah(avgRevenue);
-  if (elBadgeCnt) elBadgeCnt.textContent = totalCount;
-}
-
-// Render Sales Data Table with Search, Filter & Actions
-function renderSalesTable() {
-  const tbody = document.getElementById('sales-table-body');
-  if (!tbody) return;
-
-  const allInvoices = StorageService.getAllInvoices();
-  updateSalesKPIs(allInvoices);
-
-  const searchVal = (document.getElementById('sales-search-input')?.value || '').toLowerCase().trim();
-  const statusFilter = document.getElementById('sales-filter-status')?.value || 'ALL';
-  const sortFilter = document.getElementById('sales-filter-sort')?.value || 'date-desc';
-
-  let filtered = allInvoices.filter(inv => {
-    // Status filter
-    if (statusFilter !== 'ALL' && inv.status !== statusFilter) {
-      return false;
-    }
-
-    // Search query filter
-    if (searchVal) {
-      const noMatch = (inv.invoiceNumber || '').toLowerCase().includes(searchVal);
-      const clientMatch = (inv.client?.name || '').toLowerCase().includes(searchVal);
-      const contactMatch = (inv.client?.contactPerson || '').toLowerCase().includes(searchVal);
-      const itemMatch = Array.isArray(inv.items) && inv.items.some(it => (it.name || '').toLowerCase().includes(searchVal));
-      if (!noMatch && !clientMatch && !contactMatch && !itemMatch) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-
-  // Sorting
-  filtered.sort((a, b) => {
-    const totalA = calculateInvoiceTotal(a);
-    const totalB = calculateInvoiceTotal(b);
-    const dateA = new Date(a.date || '1970-01-01').getTime();
-    const dateB = new Date(b.date || '1970-01-01').getTime();
-
-    if (sortFilter === 'date-asc') return dateA - dateB;
-    if (sortFilter === 'total-desc') return totalB - totalA;
-    if (sortFilter === 'total-asc') return totalA - totalB;
-    return dateB - dateA; // default date-desc
-  });
-
-  tbody.innerHTML = '';
-
-  const paginationInfo = document.getElementById('sales-table-pagination-info');
-  if (paginationInfo) {
-    paginationInfo.textContent = `Menampilkan ${filtered.length} dari total ${allInvoices.length} data transaksi penjualan`;
-  }
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" class="text-center py-12 text-slate-400">
-          <div class="text-3xl mb-2">📋</div>
-          <p class="font-medium">Tidak ada data transaksi penjualan yang sesuai.</p>
-          <p class="text-[11px] mt-1 text-slate-400">Coba ubah kata kunci pencarian atau buat invoice baru.</p>
-        </td>
-      </tr>
-    `;
-    return;
-  }
-
-  filtered.forEach((inv, index) => {
-    const tr = document.createElement('tr');
-    tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100';
-
-    const grandTotal = calculateInvoiceTotal(inv);
-
-    // Items preview pills
-    let itemsHtml = '<span class="text-slate-400">-</span>';
-    if (Array.isArray(inv.items) && inv.items.length > 0) {
-      const firstTwo = inv.items.slice(0, 2).map(it => `
-        <span class="inline-block bg-slate-100 text-slate-700 rounded px-1.5 py-0.5 text-[10px] mr-1 mb-1 font-medium border border-slate-200">
-          ${escapeHtml(it.name || 'Item')} <strong class="text-slate-900 font-bold">x${it.qty || 1}</strong>
-        </span>
-      `).join('');
-      const moreCount = inv.items.length > 2 ? `<span class="inline-block bg-blue-50 text-blue-600 rounded px-1.5 py-0.5 text-[9.5px] font-bold border border-blue-100">+${inv.items.length - 2} lainnya</span>` : '';
-      itemsHtml = `<div class="max-w-xs flex flex-wrap items-center">${firstTwo}${moreCount}</div>`;
-    }
-
-    // Status styling
-    let statusBadgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
-    if (inv.status === 'LUNAS') {
-      statusBadgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-    } else if (inv.status === 'BELUM LUNAS') {
-      statusBadgeClass = 'bg-amber-100 text-amber-800 border-amber-300';
-    } else if (inv.status === 'JATUH TEMPO') {
-      statusBadgeClass = 'bg-red-100 text-red-800 border-red-300';
-    } else if (inv.status === 'DP') {
-      statusBadgeClass = 'bg-blue-100 text-blue-800 border-blue-300';
-    }
-
-    tr.innerHTML = `
-      <td class="py-3 px-3.5 text-center font-medium text-slate-400 text-[11px]">${index + 1}</td>
-      <td class="py-3 px-3.5 font-bold text-slate-900 font-mono text-xs cursor-pointer hover:text-blue-600 transition-colors btn-row-open" title="Klik untuk membuka invoice">
-        ${escapeHtml(inv.invoiceNumber || '-')}
-      </td>
-      <td class="py-3 px-3.5 text-slate-600 whitespace-nowrap text-[11px]">
-        ${formatTanggalIndo(inv.date)}
-      </td>
-      <td class="py-3 px-3.5">
-        <div class="font-bold text-slate-800 text-xs">${escapeHtml(inv.client?.name || 'Pelanggan Umum')}</div>
-        ${inv.client?.contactPerson ? `<div class="text-[10.5px] text-slate-500">${escapeHtml(inv.client.contactPerson)}</div>` : ''}
-      </td>
-      <td class="py-3 px-3.5">
-        ${itemsHtml}
-      </td>
-      <td class="py-3 px-3.5 text-right font-black text-slate-900 text-xs">
-        ${formatRupiah(grandTotal)}
-      </td>
-      <td class="py-3 px-3.5 text-center whitespace-nowrap">
-        <span class="inline-block px-2.5 py-0.5 text-[10px] font-extrabold rounded border uppercase tracking-wider ${statusBadgeClass}">
-          ${escapeHtml(inv.status || 'BELUM LUNAS')}
-        </span>
-      </td>
-      <td class="py-3 px-3.5 text-center whitespace-nowrap">
-        <div class="inline-flex items-center gap-1.5 justify-center">
-          <button type="button" class="btn-row-open px-2.5 py-1 text-[11px] font-semibold rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition flex items-center gap-1" title="Buka & Edit Invoice">
-            <span>✏️</span> Edit
-          </button>
-          <button type="button" class="btn-row-pdf px-2 py-1 text-[11px] font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition flex items-center gap-1" title="Unduh PDF">
-            <span>📥</span> PDF
-          </button>
-          <button type="button" class="btn-row-delete px-1.5 py-1 text-[11px] font-semibold rounded bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition" title="Hapus Data">
-            🗑️
-          </button>
-        </div>
-      </td>
-    `;
-
-    // Event: Open / Edit
-    tr.querySelectorAll('.btn-row-open').forEach(btn => {
-      btn.addEventListener('click', () => {
-        currentInvoice = JSON.parse(JSON.stringify(inv));
-        populateFormFromState();
-        updateLivePreview();
-        switchView('builder');
-        showToast(`Invoice ${inv.invoiceNumber} siap diedit`);
-      });
-    });
-
-    // Event: Download PDF directly
-    tr.querySelector('.btn-row-pdf').addEventListener('click', async (e) => {
-      const originalBtnText = e.currentTarget.innerHTML;
-      e.currentTarget.disabled = true;
-      e.currentTarget.innerHTML = '<span class="animate-spin inline-block text-[10px]">⟳</span>';
-
-      try {
-        // Temporarily load this invoice into preview to export
-        const tempInv = JSON.parse(JSON.stringify(inv));
-        const prevCurrent = currentInvoice;
-        currentInvoice = tempInv;
-        updateLivePreview();
-
-        const sheetEl = document.getElementById('invoice-preview-sheet');
-        await PDFExportService.exportToPDF(sheetEl, {
-          invoiceNumber: tempInv.invoiceNumber,
-          clientName: tempInv.client?.name
-        });
-
-        // Restore active editor invoice
-        currentInvoice = prevCurrent;
-        updateLivePreview();
-        showToast(`PDF ${inv.invoiceNumber} berhasil diunduh`);
-      } catch (err) {
-        console.error(err);
-        showToast('Gagal mengunduh PDF', 'error');
-      } finally {
-        e.currentTarget.disabled = false;
-        e.currentTarget.innerHTML = originalBtnText;
-      }
-    });
-
-    // Event: Delete
-    tr.querySelector('.btn-row-delete').addEventListener('click', () => {
-      if (confirm(`Hapus transaksi invoice ${inv.invoiceNumber}?`)) {
-        StorageService.deleteInvoice(inv.id);
-        renderSalesTable();
-        renderHistoryTable();
-        showToast('Transaksi berhasil dihapus');
-      }
-    });
-
-    tbody.appendChild(tr);
-  });
-}
-
-// Export Sales Data to CSV / Excel
-function exportSalesToCSV() {
-  const invoices = StorageService.getAllInvoices();
-  if (!invoices || invoices.length === 0) {
-    showToast('Belum ada data penjualan untuk diekspor', 'error');
-    return;
-  }
-
-  const headers = [
-    'No',
-    'No Invoice',
-    'Tanggal',
-    'Jatuh Tempo',
-    'Nama Pelanggan',
-    'No Telp Pelanggan',
-    'Alamat Pelanggan',
-    'Item Terjual',
-    'Total Kuantitas',
-    'Subtotal (Rp)',
-    'Diskon (Rp)',
-    'PPN (%)',
-    'Ongkir (Rp)',
-    'Grand Total (Rp)',
-    'Status Pembayaran'
-  ];
-
-  const rows = invoices.map((inv, index) => {
-    const total = calculateInvoiceTotal(inv);
-    let itemSummary = '';
-    let totalQty = 0;
-    if (Array.isArray(inv.items)) {
-      itemSummary = inv.items.map(it => `${it.name} (${it.qty} ${it.unit || ''})`).join('; ');
-      totalQty = inv.items.reduce((acc, it) => acc + (parseFloat(it.qty) || 0), 0);
-    }
-
-    return [
-      index + 1,
-      `"${(inv.invoiceNumber || '').replace(/"/g, '""')}"`,
-      `"${inv.date || ''}"`,
-      `"${inv.dueDate || ''}"`,
-      `"${(inv.client?.name || '').replace(/"/g, '""')}"`,
-      `"${(inv.client?.phone || '').replace(/"/g, '""')}"`,
-      `"${(inv.client?.address || '').replace(/"/g, '""')}"`,
-      `"${itemSummary.replace(/"/g, '""')}"`,
-      totalQty,
-      inv.items ? inv.items.reduce((s, it) => s + (it.qty * it.price), 0) : 0,
-      inv.globalDiscountValue || 0,
-      inv.taxRate || 0,
-      inv.shippingFee || 0,
-      total,
-      `"${inv.status || ''}"`
-    ];
-  });
-
-  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Data_Penjualan_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Data penjualan berhasil diekspor ke Excel (CSV)');
-}
-
-// Print Sales Report Cleanly
-function printSalesReport() {
-  document.body.classList.add('printing-sales-report');
-  window.print();
-  setTimeout(() => {
-    document.body.classList.remove('printing-sales-report');
-  }, 1000);
-}
-
-// Create new invoice from sales view
-function createNewInvoiceFromSales() {
-  const savedStore = StorageService.getStoreProfile() || currentInvoice.store;
-  currentInvoice = {
-    ...JSON.parse(JSON.stringify(window.DEFAULT_SAMPLE_DATA)),
-    id: 'INV-' + Date.now(),
-    invoiceNumber: generateInvoiceNumber(),
-    date: new Date().toISOString().split('T')[0],
-    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    status: 'BELUM LUNAS',
-    store: savedStore,
-    client: { name: '', contactPerson: '', phone: '', email: '', address: '', shippingAddress: '' },
-    items: [{ id: Date.now(), name: '', description: '', qty: 1, unit: 'Pcs', price: 0, discount: 0 }],
-    downPayment: 0
-  };
-  populateFormFromState();
-  updateLivePreview();
-  switchView('builder');
-  showToast('Formulir invoice baru siap diisi');
-}
-
+// Global Exports
+window.populateFormFromState = populateFormFromState;
+window.renderFormItems = renderFormItems;
+window.renderFormBanks = renderFormBanks;
+window.bindInput = bindInput;
+window.initViewNavigation = initViewNavigation;
+window.switchView = switchView;
+window.initSignaturePad = initSignaturePad;
+window.setupEventListeners = setupEventListeners;
+window.validateInvoiceNumber = validateInvoiceNumber;

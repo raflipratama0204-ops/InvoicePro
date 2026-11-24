@@ -1,106 +1,106 @@
 /**
  * InvoicePro - Local Storage & Data Management Module
+ * Supports: Invoices, Store Profile, Master Pelanggan, Master Produk, Master Rekening Bank
  */
 
 const STORAGE_KEYS = {
   STORE_PROFILE: 'invoicepro_store_profile',
   INVOICES: 'invoicepro_invoices',
+  CUSTOMERS: 'invoicepro_customers',
+  PRODUCTS: 'invoicepro_products',
+  BANKS: 'invoicepro_banks',
   APP_SETTINGS: 'invoicepro_settings'
 };
 
-// Default sample data for first-time users
-const DEFAULT_SAMPLE_DATA = {
-  id: 'INV-20261123-001',
-  invoiceNumber: 'INV/2026/XI/0001',
-  date: new Date().toISOString().split('T')[0],
-  dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  status: 'LUNAS', // LUNAS, BELUM LUNAS, JATUH TEMPO, DP
-  theme: 'blue',
-  
-  // Store / Seller Info
-  store: {
-    name: 'PT. NUSANTARA MAJU BERSAMA',
-    tagline: 'Solusi Pengadaan & Perdagangan Umum Berkualitas',
-    address: 'Jl. Sudirman No. 88, Gedung Sahid Lt. 12, Jakarta Pusat, DKI Jakarta 10220',
-    phone: '+62 812-3456-7890',
-    email: 'kontak@nusantarama.co.id',
-    npwp: '01.234.567.8-012.000',
+// Default Notes & Terms
+const DEFAULT_NOTES = 'Terima kasih atas kepercayaan Anda bertransaksi dengan kami. Mohon periksa kembali kondisi barang saat serah terima.';
+const DEFAULT_TERMS = '1. Pembayaran sah apabila dana sudah masuk ke rekening yang tertera di atas.\n2. Bukti transfer mohon dikonfirmasikan via WhatsApp.';
+
+// Default blank invoice template generator
+function createBlankInvoice(savedStoreProfile = null) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  let random = Math.floor(1000 + Math.random() * 9000);
+  let invoiceNumber = `INV/${year}${month}${day}/${random}`;
+  try {
+    const existingInvoices = typeof StorageService !== 'undefined' ? StorageService.getAllInvoices() : [];
+    let attempts = 0;
+    while (existingInvoices.some(inv => inv.invoiceNumber && inv.invoiceNumber.trim().toLowerCase() === invoiceNumber.toLowerCase()) && attempts < 50) {
+      random = Math.floor(1000 + Math.random() * 9000);
+      invoiceNumber = `INV/${year}${month}${day}/${random}`;
+      attempts++;
+    }
+  } catch (e) {}
+  const dueDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  const store = savedStoreProfile ? { ...savedStoreProfile } : {
+    name: '',
+    tagline: '',
+    address: '',
+    phone: '',
+    email: '',
+    npwp: '',
     logo: ''
-  },
-  
-  // Client Info
-  client: {
-    name: 'CV. BINTANG KARYA SENTOSA',
-    contactPerson: 'Bpk. Ahmad Fauzi (Procurement)',
-    phone: '+62 813-9876-5432',
-    email: 'procurement@bintangkarya.com',
-    address: 'Jl. Raya Darmo Permai No. 45, Kota Surabaya, Jawa Timur 60189',
-    shippingAddress: ''
-  },
-  
-  // Items List
-  items: [
-    {
-      id: 1,
-      name: 'Laptop Bisnis Ultrabook 14 Inch Core i7',
-      description: 'RAM 16GB, SSD 512GB, Garansi Resmi 2 Tahun',
-      qty: 2,
-      unit: 'Unit',
-      price: 13500000,
-      discount: 0
+  };
+
+  return {
+    id: 'INV-' + Date.now(),
+    invoiceNumber: invoiceNumber,
+    date: now.toISOString().split('T')[0],
+    dueDate: dueDate,
+    status: 'BELUM LUNAS', // LUNAS, BELUM LUNAS, JATUH TEMPO, DP
+    theme: 'dark',
+    
+    // Store / Seller Info
+    store: store,
+    
+    // Client Info (completely blank)
+    client: {
+      name: '',
+      contactPerson: '',
+      phone: '',
+      email: '',
+      address: '',
+      shippingAddress: ''
     },
-    {
-      id: 2,
-      name: 'Monitor LED 24 Inch Full HD IPS',
-      description: 'Resolusi 1920x1080, 75Hz Refresh Rate, Kabel HDMI Included',
-      qty: 2,
-      unit: 'Unit',
-      price: 1850000,
-      discount: 50000
-    },
-    {
-      id: 3,
-      name: 'Wireless Keyboard & Mouse Combo Ergonomic',
-      description: 'Silent Click, 2.4Ghz USB Receiver & Bluetooth',
-      qty: 5,
-      unit: 'Set',
-      price: 350000,
-      discount: 0
-    }
-  ],
-  
-  // Additional financial fields
-  globalDiscountType: 'fixed', // 'fixed' or 'percent'
-  globalDiscountValue: 0,
-  taxRate: 11, // PPN 11%
-  shippingFee: 150000,
-  otherFee: 0,
-  downPayment: 0,
-  
-  // Payment Method
-  banks: [
-    {
-      bankName: 'Bank Central Asia (BCA)',
-      accountNumber: '8830-1234-5678',
-      accountName: 'PT NUSANTARA MAJU BERSAMA'
-    },
-    {
-      bankName: 'Bank Mandiri',
-      accountNumber: '137-00-9876-5432',
-      accountName: 'PT NUSANTARA MAJU BERSAMA'
-    }
-  ],
-  
-  // Terms & Notes
-  notes: 'Terima kasih atas kepercayaan Anda bertransaksi dengan kami. Mohon periksa kembali kondisi barang saat serah terima.',
-  terms: '1. Pembayaran sah apabila dana sudah masuk ke rekening yang tertera di atas.\n2. Barang yang telah dibeli dilindungi garansi resmi sesuai kartu garansi masing-masing produk.\n3. Bukti transfer mohon dikonfirmasikan via WhatsApp.',
-  
-  // Signature
-  signatureName: 'Rafli Ramadhan, S.E.',
-  signatureTitle: 'Direktur Operasional',
-  signatureImage: '',
-  showStamp: true
-};
+    
+    // 1 Clean Blank Item
+    items: [
+      {
+        id: Date.now(),
+        name: '',
+        description: '',
+        qty: 1,
+        unit: 'Pcs',
+        price: 0,
+        discount: 0
+      }
+    ],
+    
+    // Financial settings
+    globalDiscountType: 'fixed', // 'fixed' or 'percent'
+    globalDiscountValue: 0,
+    taxRate: 0, // Default 0% so blank form starts clean at Rp 0
+    shippingFee: 0,
+    otherFee: 0,
+    downPayment: 0,
+    
+    // Payment banks (empty by default, user can select from master banks)
+    banks: [],
+    
+    // Notes & Terms (Standar tetap ada)
+    notes: DEFAULT_NOTES,
+    terms: DEFAULT_TERMS,
+    
+    // Signature
+    signatureName: savedStoreProfile?.signatureName || '',
+    signatureTitle: savedStoreProfile?.signatureTitle || '',
+    signatureImage: '',
+    showStamp: true
+  };
+}
 
 class StorageService {
   /**
@@ -130,11 +130,295 @@ class StorageService {
   }
 
   /**
-   * Get all saved invoices
+   * Produce a clean blank invoice respecting saved store profile
+   */
+  static getBlankInvoice() {
+    const savedStore = this.getStoreProfile();
+    return createBlankInvoice(savedStore);
+  }
+
+  // ==========================================
+  // MASTER DATA: PELANGGAN (CUSTOMERS)
+  // ==========================================
+
+  /**
+   * Get all saved customers
+   */
+  static getCustomers() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+      const list = data ? JSON.parse(data) : [];
+      return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    } catch (e) {
+      console.error('Failed to get customers:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Save or update customer
+   */
+  static saveCustomer(customer) {
+    try {
+      const list = this.getCustomers();
+      const payload = {
+        id: customer.id || 'CUST-' + Date.now(),
+        name: (customer.name || '').trim(),
+        contactPerson: (customer.contactPerson || '').trim(),
+        phone: (customer.phone || '').trim(),
+        email: (customer.email || '').trim(),
+        address: (customer.address || '').trim(),
+        shippingAddress: (customer.shippingAddress || '').trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (!payload.name) return null;
+
+      const existingIndex = list.findIndex(c => c.id === payload.id || c.name.toLowerCase() === payload.name.toLowerCase());
+      if (existingIndex >= 0) {
+        payload.id = list[existingIndex].id;
+        list[existingIndex] = payload;
+      } else {
+        payload.createdAt = new Date().toISOString();
+        list.push(payload);
+      }
+
+      localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(list));
+      return payload;
+    } catch (e) {
+      console.error('Failed to save customer:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Delete customer by ID
+   */
+  static deleteCustomer(id) {
+    try {
+      let list = this.getCustomers();
+      list = list.filter(c => c.id !== id);
+      localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(list));
+      return true;
+    } catch (e) {
+      console.error('Failed to delete customer:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Get customer by ID
+   */
+  static getCustomerById(id) {
+    const list = this.getCustomers();
+    return list.find(c => c.id === id) || null;
+  }
+
+  // ==========================================
+  // MASTER DATA: PRODUK & JASA (PRODUCTS)
+  // ==========================================
+
+  /**
+   * Get all saved products
+   */
+  static getProducts() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+      const list = data ? JSON.parse(data) : [];
+      return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    } catch (e) {
+      console.error('Failed to get products:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Save or update product
+   */
+  static saveProduct(product) {
+    try {
+      const list = this.getProducts();
+      const payload = {
+        id: product.id || 'PROD-' + Date.now(),
+        name: (product.name || '').trim(),
+        unit: (product.unit || 'Pcs').trim(),
+        price: parseFloat(product.price) || 0,
+        description: (product.description || '').trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (!payload.name) return null;
+
+      const existingIndex = list.findIndex(p => p.id === payload.id || p.name.toLowerCase() === payload.name.toLowerCase());
+      if (existingIndex >= 0) {
+        payload.id = list[existingIndex].id;
+        list[existingIndex] = payload;
+      } else {
+        payload.createdAt = new Date().toISOString();
+        list.push(payload);
+      }
+
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(list));
+      return payload;
+    } catch (e) {
+      console.error('Failed to save product:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Delete product by ID
+   */
+  static deleteProduct(id) {
+    try {
+      let list = this.getProducts();
+      list = list.filter(p => p.id !== id);
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(list));
+      return true;
+    } catch (e) {
+      console.error('Failed to delete product:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Find product by name (case-insensitive)
+   */
+  static getProductByName(name) {
+    if (!name) return null;
+    const clean = name.trim().toLowerCase();
+    const list = this.getProducts();
+    return list.find(p => p.name.trim().toLowerCase() === clean) || null;
+  }
+
+  /**
+   * Batch import products from Excel / CSV
+   */
+  static importProductsBatch(productsList, overwrite = true) {
+    try {
+      if (!Array.isArray(productsList) || productsList.length === 0) {
+        return { success: false, added: 0, updated: 0 };
+      }
+      const list = this.getProducts();
+      let added = 0;
+      let updated = 0;
+
+      productsList.forEach(p => {
+        const name = (p.name || '').trim();
+        if (!name) return;
+
+        const payload = {
+          name: name,
+          unit: (p.unit || 'Pcs').trim(),
+          price: parseFloat(p.price) || 0,
+          description: (p.description || '').trim(),
+          updatedAt: new Date().toISOString()
+        };
+
+        const existingIndex = list.findIndex(item => item.name.trim().toLowerCase() === name.toLowerCase());
+        if (existingIndex >= 0) {
+          if (overwrite) {
+            list[existingIndex] = {
+              ...list[existingIndex],
+              ...payload,
+              id: list[existingIndex].id
+            };
+            updated++;
+          }
+        } else {
+          payload.id = 'PROD-' + Date.now() + '-' + Math.floor(1000 + Math.random() * 9000);
+          payload.createdAt = new Date().toISOString();
+          list.push(payload);
+          added++;
+        }
+      });
+
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(list));
+      return { success: true, added, updated };
+    } catch (e) {
+      console.error('Failed to import products batch:', e);
+      return { success: false, added: 0, updated: 0, error: e.message };
+    }
+  }
+
+  // ==========================================
+  // MASTER DATA: REKENING BANK (BANKS)
+  // ==========================================
+
+  /**
+   * Get all saved master bank accounts
+   */
+  static getSavedBanks() {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.BANKS);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      console.error('Failed to get saved banks:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Save or update bank account
+   */
+  static saveBank(bank) {
+    try {
+      const list = this.getSavedBanks();
+      const payload = {
+        id: bank.id || 'BANK-' + Date.now(),
+        bankName: (bank.bankName || '').trim(),
+        accountNumber: (bank.accountNumber || '').trim(),
+        accountName: (bank.accountName || '').trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (!payload.bankName || !payload.accountNumber) return null;
+
+      const existingIndex = list.findIndex(b => b.id === payload.id || (
+        b.bankName.toLowerCase() === payload.bankName.toLowerCase() &&
+        b.accountNumber.replace(/[\s-]/g, '') === payload.accountNumber.replace(/[\s-]/g, '')
+      ));
+
+      if (existingIndex >= 0) {
+        payload.id = list[existingIndex].id;
+        list[existingIndex] = payload;
+      } else {
+        payload.createdAt = new Date().toISOString();
+        list.push(payload);
+      }
+
+      localStorage.setItem(STORAGE_KEYS.BANKS, JSON.stringify(list));
+      return payload;
+    } catch (e) {
+      console.error('Failed to save bank:', e);
+      return null;
+    }
+  }
+
+  /**
+   * Delete saved bank account by ID
+   */
+  static deleteBank(id) {
+    try {
+      let list = this.getSavedBanks();
+      list = list.filter(b => b.id !== id);
+      localStorage.setItem(STORAGE_KEYS.BANKS, JSON.stringify(list));
+      return true;
+    } catch (e) {
+      console.error('Failed to delete bank:', e);
+      return false;
+    }
+  }
+
+  // ==========================================
+  // INVOICES & TRANSACTIONS
+  // ==========================================
+
+  /**
+   * Get all saved invoices (no dummy injection; starts empty if clean)
    */
   static getAllInvoices() {
     try {
-      this.ensureInitialData();
       const data = localStorage.getItem(STORAGE_KEYS.INVOICES);
       return data ? JSON.parse(data) : [];
     } catch (e) {
@@ -144,124 +428,24 @@ class StorageService {
   }
 
   /**
-   * Ensure default initial sales data exists on first load
+   * Keep for backward compatibility; does not inject dummy sample invoices
    */
   static ensureInitialData() {
-    try {
-      const existing = localStorage.getItem(STORAGE_KEYS.INVOICES);
-      if (!existing || JSON.parse(existing).length === 0) {
-        const seedData = [
-          JSON.parse(JSON.stringify(window.DEFAULT_SAMPLE_DATA)),
-          {
-            id: 'INV-20261122-002',
-            invoiceNumber: 'INV/2026/XI/0002',
-            date: '2026-11-22',
-            dueDate: '2026-11-29',
-            status: 'BELUM LUNAS',
-            theme: 'blue',
-            store: window.DEFAULT_SAMPLE_DATA.store,
-            client: {
-              name: 'PT. MANDIRI PERKASA JAYA',
-              contactPerson: 'Ibu Ratna Dewi',
-              phone: '+62 821-1122-3344',
-              email: 'finance@mandiriperkasa.co.id',
-              address: 'Kawasan Industri MM2100 Blok C-5, Cikarang Barat, Bekasi',
-              shippingAddress: ''
-            },
-            items: [
-              {
-                id: 101,
-                name: 'Server Rack 42U Enterprise with PDU & Fan',
-                description: 'Include Cable Management, Glass Front Door',
-                qty: 1,
-                unit: 'Unit',
-                price: 13500000,
-                discount: 0
-              },
-              {
-                id: 102,
-                name: 'Managed Switch 24-Port Gigabit PoE+',
-                description: 'Layer 3 Features, 4x SFP+ Uplink 10G',
-                qty: 2,
-                unit: 'Unit',
-                price: 3850000,
-                discount: 200000
-              }
-            ],
-            globalDiscountType: 'fixed',
-            globalDiscountValue: 0,
-            taxRate: 11,
-            shippingFee: 250000,
-            otherFee: 0,
-            downPayment: 0,
-            banks: window.DEFAULT_SAMPLE_DATA.banks,
-            notes: 'Barang ready stock siap kirim setelah PO dikonfirmasi.',
-            terms: '1. Pembayaran tempo 14 hari sejak barang diterima.\n2. Garansi resmi 1 tahun.',
-            signatureName: 'Rafli Ramadhan, S.E.',
-            signatureTitle: 'Direktur Operasional',
-            signatureImage: '',
-            showStamp: true,
-            createdAt: '2026-11-22T08:30:00.000Z',
-            updatedAt: '2026-11-22T08:30:00.000Z'
-          },
-          {
-            id: 'INV-20261120-003',
-            invoiceNumber: 'INV/2026/XI/0003',
-            date: '2026-11-20',
-            dueDate: '2026-11-27',
-            status: 'DP',
-            theme: 'blue',
-            store: window.DEFAULT_SAMPLE_DATA.store,
-            client: {
-              name: 'TOKO BERKAH ABADI ELEKTRONIK',
-              contactPerson: 'Bpk. H. Hendra',
-              phone: '+62 856-7788-9900',
-              email: 'berkahabadi.store@gmail.com',
-              address: 'Pusat Grosir Pasar Pagi Lt. 2 Blok A No. 12, Jakarta Barat',
-              shippingAddress: ''
-            },
-            items: [
-              {
-                id: 201,
-                name: 'Smart TV LED 55 Inch 4K UHD',
-                description: 'Google TV, Dolby Audio, Bluetooth 5.0',
-                qty: 2,
-                unit: 'Unit',
-                price: 5200000,
-                discount: 200000
-              },
-              {
-                id: 202,
-                name: 'Wall Bracket Heavy Duty Swivel 32-65 Inch',
-                description: 'Bahan Baja Kokoh, VESA Support',
-                qty: 2,
-                unit: 'Pcs',
-                price: 250000,
-                discount: 0
-              }
-            ],
-            globalDiscountType: 'fixed',
-            globalDiscountValue: 0,
-            taxRate: 0,
-            shippingFee: 100000,
-            otherFee: 0,
-            downPayment: 5000000,
-            banks: window.DEFAULT_SAMPLE_DATA.banks,
-            notes: 'Sisa pembayaran dilunasi saat pengiriman barang sampai di lokasi.',
-            terms: '1. DP tidak dapat dikembalikan apabila pembatalan sepihak.',
-            signatureName: 'Rafli Ramadhan, S.E.',
-            signatureTitle: 'Direktur Operasional',
-            signatureImage: '',
-            showStamp: true,
-            createdAt: '2026-11-20T10:15:00.000Z',
-            updatedAt: '2026-11-20T10:15:00.000Z'
-          }
-        ];
-        localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(seedData));
-      }
-    } catch (e) {
-      console.error('Error seeding initial sales data:', e);
-    }
+    // Intentionally left blank as requested: user wants a clean, empty start.
+  }
+
+  /**
+   * Check if invoice number is duplicate in storage
+   */
+  static isInvoiceNumberDuplicate(invoiceNumber, currentId = null) {
+    if (!invoiceNumber) return false;
+    const cleanNo = invoiceNumber.trim().toLowerCase();
+    const invoices = this.getAllInvoices();
+    return invoices.some(inv => 
+      inv.invoiceNumber && 
+      inv.invoiceNumber.trim().toLowerCase() === cleanNo && 
+      inv.id !== currentId
+    );
   }
 
   /**
@@ -269,6 +453,14 @@ class StorageService {
    */
   static saveInvoice(invoiceData) {
     try {
+      if (!invoiceData || !invoiceData.invoiceNumber) return false;
+
+      // Duplicate prevention
+      if (this.isInvoiceNumberDuplicate(invoiceData.invoiceNumber, invoiceData.id)) {
+        console.warn('Cannot save: Duplicate invoice number', invoiceData.invoiceNumber);
+        return false;
+      }
+
       const invoices = this.getAllInvoices();
       const existingIndex = invoices.findIndex(inv => inv.id === invoiceData.id);
       
@@ -315,15 +507,22 @@ class StorageService {
     return invoices.find(inv => inv.id === id) || null;
   }
 
+  // ==========================================
+  // BACKUP & RESTORE
+  // ==========================================
+
   /**
-   * Export all invoices as a downloadable JSON backup
+   * Export all data (invoices, store profile, customers, products, banks) as JSON
    */
   static exportDataJSON() {
     const data = {
-      version: '1.0',
+      version: '2.0',
       exportedAt: new Date().toISOString(),
       storeProfile: this.getStoreProfile(),
-      invoices: this.getAllInvoices()
+      invoices: this.getAllInvoices(),
+      customers: this.getCustomers(),
+      products: this.getProducts(),
+      banks: this.getSavedBanks()
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -347,6 +546,15 @@ class StorageService {
       if (Array.isArray(data.invoices)) {
         localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(data.invoices));
       }
+      if (Array.isArray(data.customers)) {
+        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(data.customers));
+      }
+      if (Array.isArray(data.products)) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
+      }
+      if (Array.isArray(data.banks)) {
+        localStorage.setItem(STORAGE_KEYS.BANKS, JSON.stringify(data.banks));
+      }
       return true;
     } catch (e) {
       console.error('Import error:', e);
@@ -356,5 +564,6 @@ class StorageService {
 }
 
 window.StorageService = StorageService;
-window.DEFAULT_SAMPLE_DATA = DEFAULT_SAMPLE_DATA;
-
+window.createBlankInvoice = createBlankInvoice;
+window.DEFAULT_NOTES = DEFAULT_NOTES;
+window.DEFAULT_TERMS = DEFAULT_TERMS;

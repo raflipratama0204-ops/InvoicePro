@@ -67,7 +67,7 @@ class PDFExportService {
     clone.style.overflow = 'hidden';
 
     // Re-apply the active theme attribute so CSS variables match exactly
-    const activeTheme = document.body.getAttribute('data-theme') || 'blue';
+    const activeTheme = document.body.getAttribute('data-theme') || 'dark';
     stage.setAttribute('data-theme', activeTheme);
 
     stage.appendChild(clone);
