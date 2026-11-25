@@ -13,6 +13,7 @@ const FirebaseSync = (function () {
   let isPulling = false;
   let isInitialized = false;
   let openAuthModalFn = null;
+  let realtimeUnsubscribers = [];
 
   // Load Firebase configuration strictly from backend / repo config files
   async function loadBackendFirebaseConfig() {
@@ -298,6 +299,93 @@ const FirebaseSync = (function () {
     }
   }
 
+  // Stop all active Firestore real-time listeners
+  function stopRealtimeListeners() {
+    realtimeUnsubscribers.forEach(unsub => {
+      try {
+        if (typeof unsub === 'function') unsub();
+      } catch (e) {}
+    });
+    realtimeUnsubscribers = [];
+  }
+
+  // Subscribe to real-time Firestore changes across devices/browsers
+  function startRealtimeListeners(uid) {
+    stopRealtimeListeners();
+    if (!db || !uid) return;
+
+    const userRef = db.collection('users').doc(uid);
+
+    // Helper for single-doc array/object collections under users/{uid}/data/{docId}
+    function watchDataDoc(docId, onData) {
+      let isInitial = true;
+      const unsub = userRef.collection('data').doc(docId).onSnapshot((doc) => {
+        if (isInitial) {
+          isInitial = false;
+          return;
+        }
+        if (doc.metadata && doc.metadata.hasPendingWrites) return;
+        const val = doc.exists ? doc.data()?.data : undefined;
+        onData(val);
+        updateHeaderUI('synced');
+      }, (err) => console.warn(`Realtime listener (${docId}) warning:`, err));
+      realtimeUnsubscribers.push(unsub);
+    }
+
+    // 1. Products / Katalog Barang
+    watchDataDoc('products', (val) => {
+      StorageService.setScopedCollectionRaw('PRODUCTS', Array.isArray(val) ? val : []);
+      if (typeof renderCatalogTableView === 'function') renderCatalogTableView();
+      if (typeof renderProductDatalist === 'function') renderProductDatalist();
+      if (typeof updateCatalogBadge === 'function') updateCatalogBadge();
+    });
+
+    // 2. Customers / Pelanggan
+    watchDataDoc('customers', (val) => {
+      StorageService.setScopedCollectionRaw('CUSTOMERS', Array.isArray(val) ? val : []);
+      if (typeof renderCustomerDatalist === 'function') renderCustomerDatalist();
+    });
+
+    // 3. Banks / Rekening
+    watchDataDoc('banks', (val) => {
+      StorageService.setScopedCollectionRaw('BANKS', Array.isArray(val) ? val : []);
+      if (typeof renderSavedBanksChecklist === 'function') renderSavedBanksChecklist();
+    });
+
+    // 4. Store Profile (Profil Toko Default)
+    watchDataDoc('storeProfile', (val) => {
+      const profile = val || null;
+      StorageService.setScopedCollectionRaw('STORE_PROFILE', profile);
+      if (profile && window.currentInvoice) {
+        const activeId = document.activeElement?.id || '';
+        if (!activeId.startsWith('input-store-')) {
+          window.currentInvoice.store = { ...profile };
+          if (typeof populateFormFromState === 'function') populateFormFromState();
+          if (typeof updateLivePreview === 'function') updateLivePreview();
+        }
+      }
+    });
+
+    // 5. Invoices / Data Penjualan
+    let isInitialInvoices = true;
+    const unsubInvoices = userRef.collection('invoices').onSnapshot((snapshot) => {
+      if (isInitialInvoices) {
+        isInitialInvoices = false;
+        return;
+      }
+      if (snapshot.metadata && snapshot.metadata.hasPendingWrites) return;
+      const invoices = [];
+      snapshot.forEach(doc => invoices.push(doc.data()));
+      invoices.sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
+      StorageService.setScopedCollectionRaw('INVOICES', invoices);
+      if (typeof renderSalesTable === 'function') renderSalesTable();
+      if (typeof renderHistoryTable === 'function') renderHistoryTable();
+      updateHeaderUI('synced');
+    }, (err) => console.warn('Realtime listener (invoices) warning:', err));
+
+    realtimeUnsubscribers.push(unsubInvoices);
+  }
+
   // Handle auth state transitions (switches user data store!)
   async function handleAuthStateChanged(user) {
     const previousUid = currentUser ? currentUser.uid : null;
@@ -325,10 +413,13 @@ const FirebaseSync = (function () {
       }
 
       await pullAllFromCloud(user.uid);
+      startRealtimeListeners(user.uid);
+
       if (previousUid !== user.uid && typeof showToast === 'function') {
         showToast(`Selamat datang, ${user.displayName || user.email}! Data toko Anda dimuat.`);
       }
     } else {
+      stopRealtimeListeners();
       if (typeof StorageService !== 'undefined' && typeof StorageService.setActiveUser === 'function') {
         StorageService.setActiveUser(null);
       }
