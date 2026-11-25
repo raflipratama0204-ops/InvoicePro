@@ -10,6 +10,7 @@ const AutoUpdater = (function () {
   let initialCommitSha = null;
   let isUpdateAvailable = false;
   let isChecking = false;
+  let githubApiDisabled = false;
   let pollInterval = null;
   let sseSource = null;
 
@@ -143,20 +144,21 @@ const AutoUpdater = (function () {
     return false;
   }
 
-  // Cek pembaruan langsung dari GitHub Commits API
+  // Cek pembaruan langsung dari GitHub Commits API (hanya jika tidak diblokir privacy shield / CORS)
   async function checkGitHubCommitsUpdate() {
+    if (githubApiDisabled) return false;
     const repo = detectGitHubRepo();
     if (!repo) return false;
 
     try {
-      const res = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=1&_t=${Date.now()}`, {
-        cache: 'no-store',
-        headers: {
-          'Accept': 'application/vnd.github.v3+json'
-        }
+      const res = await fetch(`https://api.github.com/repos/${repo}/commits?per_page=1`, {
+        cache: 'no-store'
       });
 
-      if (!res.ok) return false;
+      if (!res.ok) {
+        if (res.status === 403 || res.status === 429) githubApiDisabled = true;
+        return false;
+      }
 
       const commits = await res.json();
       if (Array.isArray(commits) && commits.length > 0) {
@@ -176,7 +178,8 @@ const AutoUpdater = (function () {
         }
       }
     } catch (e) {
-      // Normal jika tanpa koneksi internet atau rate-limited
+      // Browser privacy shield / CORS blocked: disable further GitHub API polling and rely on same-origin version.json
+      githubApiDisabled = true;
     }
     return false;
   }
@@ -205,9 +208,10 @@ const AutoUpdater = (function () {
     }
   }
 
-  // Hubungkan ke SSE Live Reload server lokal Node.js
+  // Hubungkan ke SSE Live Reload server lokal Node.js (khusus localhost)
   function initSSE() {
-    if (window.location.protocol.startsWith('http')) {
+    const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    if (isLocalhost && window.location.protocol.startsWith('http')) {
       try {
         sseSource = new EventSource('/api/live-reload');
         sseSource.onmessage = (e) => {

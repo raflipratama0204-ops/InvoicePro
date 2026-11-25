@@ -21,7 +21,8 @@ const FirebaseSync = (function () {
       return resolvedConfig;
     }
 
-    if (window.location.protocol.startsWith('http')) {
+    const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    if (isLocalhost && window.location.protocol.startsWith('http')) {
       try {
         const res = await fetch('/api/firebase-config?_t=' + Date.now(), { cache: 'no-store' });
         if (res.ok) {
@@ -31,10 +32,10 @@ const FirebaseSync = (function () {
             return resolvedConfig;
           }
         }
-      } catch (e) {
-        // Ignore on static hosts like GitHub Pages where /api/firebase-config is absent
-      }
+      } catch (e) {}
+    }
 
+    if (window.location.protocol.startsWith('http')) {
       try {
         const resJson = await fetch('firebase-config.json?_t=' + Date.now(), { cache: 'no-store' });
         if (resJson.ok) {
@@ -307,7 +308,9 @@ const FirebaseSync = (function () {
     if (loader) loader.classList.add('hidden');
 
     if (user) {
-      StorageService.setActiveUser(user.uid);
+      if (typeof StorageService !== 'undefined' && typeof StorageService.setActiveUser === 'function') {
+        StorageService.setActiveUser(user.uid);
+      }
       updateHeaderUI('syncing');
 
       const modalAuth = document.getElementById('modal-auth');
@@ -326,7 +329,9 @@ const FirebaseSync = (function () {
         showToast(`Selamat datang, ${user.displayName || user.email}! Data toko Anda dimuat.`);
       }
     } else {
-      StorageService.setActiveUser(null);
+      if (typeof StorageService !== 'undefined' && typeof StorageService.setActiveUser === 'function') {
+        StorageService.setActiveUser(null);
+      }
       updateHeaderUI('idle');
       if (previousUid !== null) {
         refreshAllAppViews();
