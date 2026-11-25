@@ -373,7 +373,7 @@ function renderCatalogTableView(searchTerm = '') {
   let list = StorageService.getProducts();
   if (searchTerm) {
     const q = searchTerm.toLowerCase();
-    list = list.filter(p => 
+    list = list.filter(p =>
       (p.name || '').toLowerCase().includes(q) ||
       (p.description || '').toLowerCase().includes(q)
     );
@@ -414,16 +414,27 @@ function renderCatalogTableView(searchTerm = '') {
         ${formatRupiah(p.price)}
       </td>
       <td class="py-3 px-3.5 text-center">
-        <div class="flex items-center justify-center gap-1.5">
-          <button type="button" class="btn-catalog-edit px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+        <div class="flex items-center justify-center gap-1.5 flex-wrap">
+          <button type="button" class="btn-catalog-add-invoice px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition active:scale-95 flex items-center gap-1 cursor-pointer" title="Tambahkan '${escapeHtml(p.name)}' langsung ke invoice yang sedang dibuat">
+            <span>+</span> Invoice
+          </button>
+          <button type="button" class="btn-catalog-edit px-2 py-1 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer" title="Edit Master Barang">
             Edit
           </button>
-          <button type="button" class="btn-catalog-delete px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition">
+          <button type="button" class="btn-catalog-delete px-2 py-1 text-xs font-semibold rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition cursor-pointer" title="Hapus Master Barang">
             Hapus
           </button>
         </div>
       </td>
     `;
+
+    // Event: Add Product directly to Invoice
+    const btnAddInv = tr.querySelector('.btn-catalog-add-invoice');
+    if (btnAddInv) {
+      btnAddInv.addEventListener('click', (e) => {
+        addProductToInvoice(p, e.currentTarget);
+      });
+    }
 
     tr.querySelector('.btn-catalog-edit').addEventListener('click', () => {
       document.getElementById('catalog-input-id').value = p.id;
@@ -547,6 +558,109 @@ function setupCatalogViewEvents() {
   }
 }
 
+// Add product from catalog directly to active invoice
+function addProductToInvoice(product, btnElement = null) {
+  if (!product || !product.name) return;
+
+  // Pastikan window.currentInvoice terinisialisasi
+  if (!window.currentInvoice) {
+    if (typeof StorageService !== 'undefined') {
+      window.currentInvoice = StorageService.getBlankInvoice();
+    } else {
+      window.currentInvoice = { items: [] };
+    }
+  }
+
+  if (!Array.isArray(window.currentInvoice.items)) {
+    window.currentInvoice.items = [];
+  }
+
+  // Cek apakah invoice builder hanya memiliki 1 baris kosong awal
+  const isOnlyBlankItem = window.currentInvoice.items.length === 1 &&
+    (!window.currentInvoice.items[0].name || window.currentInvoice.items[0].name.trim() === '') &&
+    (parseFloat(window.currentInvoice.items[0].price) || 0) === 0;
+
+  if (isOnlyBlankItem) {
+    window.currentInvoice.items[0] = {
+      id: Date.now(),
+      name: product.name,
+      description: product.description || '',
+      qty: 1,
+      unit: product.unit || 'Pcs',
+      price: parseFloat(product.price) || 0,
+      discount: 0
+    };
+  } else {
+    // Cek apakah produk dengan nama yang sama persis sudah ada di invoice
+    const existingItem = window.currentInvoice.items.find(
+      it => (it.name || '').trim().toLowerCase() === product.name.trim().toLowerCase()
+    );
+
+    if (existingItem) {
+      // Tambahkan kuantitasnya + 1
+      const currentQty = parseFloat(existingItem.qty) || 1;
+      existingItem.qty = currentQty + 1;
+    } else {
+      // Tambahkan baris baru
+      window.currentInvoice.items.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        name: product.name,
+        description: product.description || '',
+        qty: 1,
+        unit: product.unit || 'Pcs',
+        price: parseFloat(product.price) || 0,
+        discount: 0
+      });
+    }
+  }
+
+  // Render ulang form builder dan pratinjau live
+  if (typeof renderFormItems === 'function') renderFormItems();
+  if (typeof updateLivePreview === 'function') updateLivePreview();
+  if (typeof updateBuilderBadge === 'function') updateBuilderBadge();
+
+  // Visual feedback pada tombol yang diklik
+  if (btnElement) {
+    const originalHtml = btnElement.innerHTML;
+    btnElement.innerHTML = '<span>✓</span> Masuk!';
+    btnElement.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+    btnElement.classList.add('bg-blue-600', 'hover:bg-blue-700');
+    setTimeout(() => {
+      btnElement.innerHTML = originalHtml;
+      btnElement.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+      btnElement.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+    }, 1200);
+  }
+
+  // Notifikasi toast dengan tombol buka invoice langsung
+  const totalItemCount = window.currentInvoice.items.length;
+  showToast(`
+    <span class="font-medium"><strong>"${escapeHtml(product.name)}"</strong> masuk ke invoice (${totalItemCount} item).</span>
+    <button onclick="switchView('builder')" class="ml-2 font-bold underline hover:text-white cursor-pointer text-xs">Buka Invoice →</button>
+  `, 'success');
+}
+
+// Update badge count pada tab "Buat Invoice" di navbar
+function updateBuilderBadge() {
+  const badge = document.getElementById('builder-badge-count');
+  if (!badge) return;
+
+  if (window.currentInvoice && Array.isArray(window.currentInvoice.items)) {
+    const filledItems = window.currentInvoice.items.filter(
+      it => (it.name && it.name.trim().length > 0) || (parseFloat(it.price) || 0) > 0
+    );
+    const count = filledItems.length;
+    if (count > 0) {
+      badge.textContent = `${count}`;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
 // Global Exports
 window.KNOWN_CATALOG_UNITS = KNOWN_CATALOG_UNITS;
 window.classifyCatalogColumn = classifyCatalogColumn;
@@ -559,4 +673,6 @@ window.resetCatalogForm = resetCatalogForm;
 window.updateCatalogBadge = updateCatalogBadge;
 window.renderCatalogTableView = renderCatalogTableView;
 window.setupCatalogViewEvents = setupCatalogViewEvents;
+window.addProductToInvoice = addProductToInvoice;
+window.updateBuilderBadge = updateBuilderBadge;
 

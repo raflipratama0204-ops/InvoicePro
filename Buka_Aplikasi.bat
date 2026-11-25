@@ -1,8 +1,15 @@
 @echo off
 title InvoicePro - Pembuat Invoice Penjualan
 echo ======================================================
-echo   Membuka InvoicePro di Browser Anda...
+echo   Memulai InvoicePro dengan Live Auto-Update...
 echo ======================================================
-start "" "%~dp0index.html"
-exit
 
+where node >nul 2>nul
+if %ERRORLEVEL% EQU 0 (
+  echo Menjalankan server lokal (Live Reload & Auto-Sync aktif)...
+  start "" node "%~dp0server.js"
+) else (
+  echo Membuka langsung di browser...
+  start "" "%~dp0index.html"
+)
+exit

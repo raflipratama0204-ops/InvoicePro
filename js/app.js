@@ -420,6 +420,7 @@ function renderFormItems() {
 
     container.appendChild(itemRow);
   });
+  if (typeof updateBuilderBadge === 'function') updateBuilderBadge();
 }
 
 /**
@@ -1021,7 +1022,27 @@ function setupEventListeners() {
           invoiceNumber: window.currentInvoice.invoiceNumber,
           clientName: window.currentInvoice.client.name
         });
-        showToast('PDF berhasil diunduh!');
+
+        // Otomatis simpan invoice ke Data Penjualan setelah PDF berhasil diunduh
+        let autoSaved = false;
+        const invNo = (window.currentInvoice.invoiceNumber || '').trim();
+        const isDuplicate = invNo && StorageService.isInvoiceNumberDuplicate(invNo, window.currentInvoice.id);
+
+        if (invNo && !isDuplicate) {
+          autoSaved = StorageService.saveInvoice(window.currentInvoice);
+          if (autoSaved) {
+            if (typeof renderHistoryTable === 'function') renderHistoryTable();
+            if (typeof renderSalesTable === 'function') renderSalesTable();
+          }
+        }
+
+        if (autoSaved) {
+          showToast('PDF berhasil diunduh & invoice otomatis tersimpan ke Data Penjualan!');
+        } else if (isDuplicate) {
+          showToast('PDF berhasil diunduh (tidak tersimpan otomatis karena nomor invoice duplikat)', 'error');
+        } else {
+          showToast('PDF berhasil diunduh!');
+        }
       } catch (err) {
         console.error(err);
         showToast('Gagal mengunduh PDF. Menggunakan dialog cetak...', 'error');

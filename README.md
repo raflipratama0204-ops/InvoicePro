@@ -60,6 +60,12 @@ Aplikasi web modern, cepat, dan profesional untuk membuat, mengelola, serta menc
    - Ekspor seluruh data invoice ke format file `.json` untuk cadangan (*backup*).
    - Pulihkan/impor data dari file `.json`.
 
+10. **Sinkronisasi & Pembaruan Otomatis (GitHub & Live Auto-Update)**:
+    - **Deteksi Otomatis Pembaruan GitHub**: Aplikasi secara berkala memeriksa commit/versi terbaru dari repositori GitHub maupun file `version.json`.
+    - **Live Reload Realtime**: Saat menggunakan server lokal (`server.js`), perubahan file langsung memicu refresh otomatis pada peramban yang sedang terbuka.
+    - **Perlindungan Data**: Draft invoice yang sedang diketik otomatis diamankan ke LocalStorage sebelum proses refresh berjalan, sehingga tidak ada data yang hilang.
+    - **Anti-Cache Header**: Menggunakan instruksi header no-cache sehingga peramban selalu menyajikan kode terbaru tanpa terhambat cache lama.
+
 ---
 
 ## 🚀 Cara Menjalankan Aplikasi
