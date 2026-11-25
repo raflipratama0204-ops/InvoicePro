@@ -12,6 +12,23 @@ const STORAGE_KEYS = {
   APP_SETTINGS: 'invoicepro_settings'
 };
 
+// Active user UID for per-account data isolation (null = guest/local mode)
+let activeUserUid = null;
+
+function getScopedKey(baseKey) {
+  return activeUserUid ? `${baseKey}_u_${activeUserUid}` : baseKey;
+}
+
+function notifyCloudSync(type, payload) {
+  try {
+    if (window.FirebaseSync && typeof window.FirebaseSync.onLocalChange === 'function') {
+      window.FirebaseSync.onLocalChange(type, payload);
+    }
+  } catch (e) {
+    console.warn('Cloud sync notification skipped:', e);
+  }
+}
+
 // Default Notes & Terms
 const DEFAULT_NOTES = 'Terima kasih atas kepercayaan Anda bertransaksi dengan kami. Mohon periksa kembali kondisi barang saat serah terima.';
 const DEFAULT_TERMS = '1. Pembayaran sah apabila dana sudah masuk ke rekening yang tertera di atas.\n2. Bukti transfer mohon dikonfirmasikan via WhatsApp.';
@@ -104,11 +121,45 @@ function createBlankInvoice(savedStoreProfile = null) {
 
 class StorageService {
   /**
+   * Set active user UID for per-account data isolation
+   */
+  static setActiveUser(uid) {
+    activeUserUid = uid || null;
+  }
+
+  /**
+   * Get active user UID
+   */
+  static getActiveUser() {
+    return activeUserUid;
+  }
+
+  /**
+   * Write raw collection data into current user's scoped localStorage without triggering cloud re-sync
+   */
+  static setScopedCollectionRaw(keyName, value) {
+    try {
+      const baseKey = STORAGE_KEYS[keyName];
+      if (!baseKey) return false;
+      if (value === null || value === undefined) {
+        localStorage.removeItem(getScopedKey(baseKey));
+      } else {
+        localStorage.setItem(getScopedKey(baseKey), JSON.stringify(value));
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to set scoped collection:', e);
+      return false;
+    }
+  }
+
+  /**
    * Save or update store profile (default profile)
    */
   static saveStoreProfile(profileData) {
     try {
-      localStorage.setItem(STORAGE_KEYS.STORE_PROFILE, JSON.stringify(profileData));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.STORE_PROFILE), JSON.stringify(profileData));
+      notifyCloudSync('storeProfile', profileData);
       return true;
     } catch (e) {
       console.error('Failed to save store profile:', e);
@@ -121,7 +172,7 @@ class StorageService {
    */
   static getStoreProfile() {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.STORE_PROFILE);
+      const data = localStorage.getItem(getScopedKey(STORAGE_KEYS.STORE_PROFILE));
       return data ? JSON.parse(data) : null;
     } catch (e) {
       console.error('Failed to get store profile:', e);
@@ -146,7 +197,7 @@ class StorageService {
    */
   static getCustomers() {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+      const data = localStorage.getItem(getScopedKey(STORAGE_KEYS.CUSTOMERS));
       const list = data ? JSON.parse(data) : [];
       return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     } catch (e) {
@@ -183,7 +234,8 @@ class StorageService {
         list.push(payload);
       }
 
-      localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(list));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.CUSTOMERS), JSON.stringify(list));
+      notifyCloudSync('customers', list);
       return payload;
     } catch (e) {
       console.error('Failed to save customer:', e);
@@ -198,7 +250,8 @@ class StorageService {
     try {
       let list = this.getCustomers();
       list = list.filter(c => c.id !== id);
-      localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(list));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.CUSTOMERS), JSON.stringify(list));
+      notifyCloudSync('customers', list);
       return true;
     } catch (e) {
       console.error('Failed to delete customer:', e);
@@ -223,7 +276,7 @@ class StorageService {
    */
   static getProducts() {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+      const data = localStorage.getItem(getScopedKey(STORAGE_KEYS.PRODUCTS));
       const list = data ? JSON.parse(data) : [];
       return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     } catch (e) {
@@ -258,7 +311,8 @@ class StorageService {
         list.push(payload);
       }
 
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(list));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.PRODUCTS), JSON.stringify(list));
+      notifyCloudSync('products', list);
       return payload;
     } catch (e) {
       console.error('Failed to save product:', e);
@@ -273,7 +327,8 @@ class StorageService {
     try {
       let list = this.getProducts();
       list = list.filter(p => p.id !== id);
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(list));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.PRODUCTS), JSON.stringify(list));
+      notifyCloudSync('products', list);
       return true;
     } catch (e) {
       console.error('Failed to delete product:', e);
@@ -333,7 +388,8 @@ class StorageService {
         }
       });
 
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(list));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.PRODUCTS), JSON.stringify(list));
+      notifyCloudSync('products', list);
       return { success: true, added, updated };
     } catch (e) {
       console.error('Failed to import products batch:', e);
@@ -350,7 +406,7 @@ class StorageService {
    */
   static getSavedBanks() {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.BANKS);
+      const data = localStorage.getItem(getScopedKey(STORAGE_KEYS.BANKS));
       return data ? JSON.parse(data) : [];
     } catch (e) {
       console.error('Failed to get saved banks:', e);
@@ -387,7 +443,8 @@ class StorageService {
         list.push(payload);
       }
 
-      localStorage.setItem(STORAGE_KEYS.BANKS, JSON.stringify(list));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.BANKS), JSON.stringify(list));
+      notifyCloudSync('banks', list);
       return payload;
     } catch (e) {
       console.error('Failed to save bank:', e);
@@ -402,7 +459,8 @@ class StorageService {
     try {
       let list = this.getSavedBanks();
       list = list.filter(b => b.id !== id);
-      localStorage.setItem(STORAGE_KEYS.BANKS, JSON.stringify(list));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.BANKS), JSON.stringify(list));
+      notifyCloudSync('banks', list);
       return true;
     } catch (e) {
       console.error('Failed to delete bank:', e);
@@ -419,7 +477,7 @@ class StorageService {
    */
   static getAllInvoices() {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.INVOICES);
+      const data = localStorage.getItem(getScopedKey(STORAGE_KEYS.INVOICES));
       return data ? JSON.parse(data) : [];
     } catch (e) {
       console.error('Failed to get invoices:', e);
@@ -476,7 +534,8 @@ class StorageService {
         invoices.unshift(payload);
       }
       
-      localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.INVOICES), JSON.stringify(invoices));
+      notifyCloudSync('saveInvoice', payload);
       return true;
     } catch (e) {
       console.error('Failed to save invoice:', e);
@@ -491,7 +550,8 @@ class StorageService {
     try {
       let invoices = this.getAllInvoices();
       invoices = invoices.filter(inv => inv.id !== id);
-      localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(invoices));
+      localStorage.setItem(getScopedKey(STORAGE_KEYS.INVOICES), JSON.stringify(invoices));
+      notifyCloudSync('deleteInvoice', id);
       return true;
     } catch (e) {
       console.error('Failed to delete invoice:', e);
@@ -512,53 +572,97 @@ class StorageService {
   // ==========================================
 
   /**
-   * Export all data (invoices, store profile, customers, products, banks) as JSON
+   * Export ALL application data (invoices, store profile, customers, products, banks, settings, active draft) as JSON
    */
   static exportDataJSON() {
+    const invoices = this.getAllInvoices();
+    const customers = this.getCustomers();
+    const products = this.getProducts();
+    const banks = this.getSavedBanks();
+    const storeProfile = this.getStoreProfile();
+
+    let appSettings = null;
+    try {
+      const rawSettings = localStorage.getItem(getScopedKey(STORAGE_KEYS.APP_SETTINGS));
+      appSettings = rawSettings ? JSON.parse(rawSettings) : null;
+    } catch (e) {}
+
     const data = {
-      version: '2.0',
+      version: '2.1',
       exportedAt: new Date().toISOString(),
-      storeProfile: this.getStoreProfile(),
-      invoices: this.getAllInvoices(),
-      customers: this.getCustomers(),
-      products: this.getProducts(),
-      banks: this.getSavedBanks()
+      summary: {
+        invoices: invoices.length,
+        products: products.length,
+        customers: customers.length,
+        banks: banks.length,
+        hasStoreProfile: Boolean(storeProfile && storeProfile.name)
+      },
+      storeProfile: storeProfile,
+      invoices: invoices,
+      customers: customers,
+      products: products,
+      banks: banks,
+      appSettings: appSettings,
+      activeDraft: window.currentInvoice || null
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `InvoicePro_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `InvoicePro_FullBackup_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    return data.summary;
   }
 
   /**
-   * Import data from JSON string
+   * Import ALL application data from JSON string
    */
   static importDataJSON(jsonString) {
     try {
       const data = JSON.parse(jsonString);
+      if (!data || typeof data !== 'object') return { success: false };
+
       if (data.storeProfile) {
         this.saveStoreProfile(data.storeProfile);
       }
       if (Array.isArray(data.invoices)) {
-        localStorage.setItem(STORAGE_KEYS.INVOICES, JSON.stringify(data.invoices));
+        localStorage.setItem(getScopedKey(STORAGE_KEYS.INVOICES), JSON.stringify(data.invoices));
+        notifyCloudSync('bulkInvoices', data.invoices);
       }
       if (Array.isArray(data.customers)) {
-        localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(data.customers));
+        localStorage.setItem(getScopedKey(STORAGE_KEYS.CUSTOMERS), JSON.stringify(data.customers));
+        notifyCloudSync('customers', data.customers);
       }
       if (Array.isArray(data.products)) {
-        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(data.products));
+        localStorage.setItem(getScopedKey(STORAGE_KEYS.PRODUCTS), JSON.stringify(data.products));
+        notifyCloudSync('products', data.products);
       }
       if (Array.isArray(data.banks)) {
-        localStorage.setItem(STORAGE_KEYS.BANKS, JSON.stringify(data.banks));
+        localStorage.setItem(getScopedKey(STORAGE_KEYS.BANKS), JSON.stringify(data.banks));
+        notifyCloudSync('banks', data.banks);
       }
-      return true;
+      if (data.appSettings && typeof data.appSettings === 'object') {
+        localStorage.setItem(getScopedKey(STORAGE_KEYS.APP_SETTINGS), JSON.stringify(data.appSettings));
+      }
+      if (data.activeDraft && typeof data.activeDraft === 'object') {
+        window.currentInvoice = data.activeDraft;
+      }
+
+      return {
+        success: true,
+        summary: {
+          invoices: Array.isArray(data.invoices) ? data.invoices.length : 0,
+          products: Array.isArray(data.products) ? data.products.length : 0,
+          customers: Array.isArray(data.customers) ? data.customers.length : 0,
+          banks: Array.isArray(data.banks) ? data.banks.length : 0,
+          hasStoreProfile: Boolean(data.storeProfile)
+        }
+      };
     } catch (e) {
       console.error('Import error:', e);
-      return false;
+      return { success: false };
     }
   }
 }

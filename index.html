@@ -60,7 +60,6 @@
               🚀 Update Siap!
             </button>
           </div>
-          <p class="text-xs text-slate-500">Pembuat Invoice Penjualan Siap Cetak & PDF</p>
         </div>
       </div>
 
@@ -111,6 +110,38 @@
         <button id="btn-download-pdf" class="px-4 py-1.5 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/25 transition flex items-center gap-1.5">
           <span>📥</span> Download PDF
         </button>
+
+        <!-- Account & Cloud Sync Dropdown -->
+        <div class="relative inline-block text-left">
+          <button type="button" id="btn-firebase-account" class="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition flex items-center gap-2 cursor-pointer" title="Masuk atau ganti akun">
+            <span id="firebase-account-dot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span id="firebase-account-label">Masuk Akun</span>
+          </button>
+
+          <div id="firebase-account-dropdown" class="hidden absolute right-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 py-1.5 divide-y divide-slate-100">
+            <div class="px-3.5 py-2.5 bg-slate-50/70">
+              <div id="dropdown-user-email" class="text-xs font-bold text-slate-800 truncate">-</div>
+              <div id="dropdown-user-status" class="text-[10.5px] text-emerald-600 font-medium mt-0.5">Terhubung &amp; tersinkron</div>
+            </div>
+            <div class="py-1">
+              <button type="button" id="btn-cloud-sync-now" class="w-full text-left px-3.5 py-2 text-xs hover:bg-blue-50 text-slate-700 hover:text-blue-700 flex items-center gap-2 transition">
+                <span>🔄</span> Sinkronkan Data Sekarang
+              </button>
+              <button type="button" id="btn-dropdown-export-backup" class="w-full text-left px-3.5 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center gap-2 transition">
+                <span>⬇</span> Cadangkan Semua Data (JSON)
+              </button>
+              <label class="w-full text-left px-3.5 py-2 text-xs hover:bg-slate-50 text-slate-700 flex items-center gap-2 transition cursor-pointer">
+                <span>⬆</span> Pulihkan Semua Data (JSON)
+                <input type="file" id="input-dropdown-import-backup" accept=".json" class="hidden">
+              </label>
+            </div>
+            <div class="py-1">
+              <button type="button" id="btn-firebase-logout" class="w-full text-left px-3.5 py-2 text-xs hover:bg-rose-50 text-rose-600 font-semibold flex items-center gap-2 transition">
+                <span>🚪</span> Keluar Akun (Logout)
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -1011,11 +1042,11 @@
       </div>
 
       <!-- Backup Actions -->
-      <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4 text-xs">
-        <span class="text-slate-600">Cadangkan atau pulihkan data invoice Anda:</span>
+      <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4 text-xs">
+        <span class="text-slate-600">Cadangkan atau pulihkan <strong>seluruh data aplikasi</strong> (Invoice, Katalog Barang, Pelanggan, Profil Toko &amp; Bank):</span>
         <div class="flex items-center gap-2">
           <button id="btn-export-backup" class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 font-semibold rounded-lg transition text-slate-700">
-            ⬇ Ekspor Backup (JSON)
+            ⬇ Ekspor Backup Lengkap (JSON)
           </button>
           <label class="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 font-semibold rounded-lg transition text-slate-700 cursor-pointer">
             ⬆ Pulihkan (JSON)
@@ -1333,6 +1364,62 @@
     </div>
   </div>
 
+  <!-- FULL-SCREEN LOGIN GATE: Pintu Masuk Akun InvoicePro -->
+  <div id="modal-auth" class="fixed inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 z-[9990] flex items-center justify-center p-4 no-print">
+    <!-- Loading state while checking existing Firebase session -->
+    <div id="auth-checking-loader" class="text-center text-white space-y-3">
+      <div class="w-12 h-12 mx-auto rounded-2xl bg-blue-600 flex items-center justify-center text-2xl shadow-lg shadow-blue-500/30 animate-pulse">
+        🧾
+      </div>
+      <div class="text-sm font-bold tracking-wide">InvoicePro</div>
+      <div class="text-xs text-slate-300 flex items-center justify-center gap-2">
+        <span class="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+        <span>Memeriksa sesi akun...</span>
+      </div>
+    </div>
+
+    <!-- Dedicated Login / Register Card -->
+    <div id="auth-form-container" class="hidden bg-white rounded-2xl max-w-md w-full p-7 shadow-2xl border border-slate-200/80">
+      <div class="flex flex-col items-center text-center pb-4 mb-5 border-b border-slate-100">
+        <div class="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center text-2xl shadow-md shadow-blue-500/25 mb-3">
+          🧾
+        </div>
+        <h2 class="text-base font-extrabold text-slate-900">InvoicePro</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Silakan masuk dengan akun Anda untuk melanjutkan</p>
+      </div>
+
+      <!-- Tabs: Login vs Register -->
+      <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200 mb-4 gap-1">
+        <button type="button" id="tab-auth-login" class="flex-1 py-2 text-xs font-bold rounded-lg bg-white text-blue-600 shadow-sm transition">
+          Masuk (Login)
+        </button>
+        <button type="button" id="tab-auth-register" class="flex-1 py-2 text-xs font-semibold rounded-lg text-slate-500 hover:text-slate-800 transition">
+          Daftar Akun Baru
+        </button>
+      </div>
+
+      <div id="auth-error-msg" class="hidden mb-3 p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium"></div>
+
+      <form id="form-firebase-auth" class="space-y-3.5">
+        <div id="auth-name-group" class="hidden">
+          <label class="form-label">Nama Lengkap / Nama Toko</label>
+          <input type="text" id="auth-input-name" class="form-input" placeholder="Contoh: Toko Maju Jaya">
+        </div>
+        <div>
+          <label class="form-label">Email *</label>
+          <input type="email" id="auth-input-email" required class="form-input" placeholder="nama@email.com" autocomplete="email">
+        </div>
+        <div>
+          <label class="form-label">Kata Sandi *</label>
+          <input type="password" id="auth-input-password" required minlength="6" class="form-input" placeholder="Minimal 6 karakter" autocomplete="current-password">
+        </div>
+        <button type="submit" id="btn-auth-submit" class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/20 transition cursor-pointer">
+          Masuk ke Akun
+        </button>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast Notification Container -->
   <div id="toast-container" class="no-print"></div>
 
@@ -1342,7 +1429,13 @@
   <script src="libs/signature_pad.umd.min.js"></script>
   <script src="libs/xlsx.full.min.js"></script>
 
+  <!-- Firebase Web SDK (Compat v10.14.1) -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
   <!-- Application Storage & Services -->
+  <script src="js/firebase-config.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/pdf-export.js"></script>
 
@@ -1354,6 +1447,7 @@
   <script src="js/modules/sales.js"></script>
   <script src="js/modules/master-data.js"></script>
   <script src="js/modules/updater.js"></script>
+  <script src="js/modules/firebase-sync.js"></script>
 
   <!-- Core App Controller & Lifecycle -->
   <script src="js/app.js"></script>

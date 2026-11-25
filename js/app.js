@@ -1137,33 +1137,79 @@ function setupEventListeners() {
     btnCloseHistory.addEventListener('click', () => modalHistory.classList.add('hidden'));
   }
 
-  // Export / Import JSON
+  // Export / Import Full Application Backup (JSON)
+  function handleFullBackupExport() {
+    const summary = StorageService.exportDataJSON();
+    if (summary) {
+      showToast(`Cadangan lengkap diunduh (${summary.invoices} invoice, ${summary.products} produk, ${summary.customers} pelanggan, ${summary.banks} bank)`);
+    } else {
+      showToast('Cadangan seluruh data berhasil diunduh');
+    }
+  }
+
+  function handleFullBackupImport(fileInput) {
+    const file = fileInput?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const result = StorageService.importDataJSON(event.target.result);
+      if (result && result.success) {
+        const s = result.summary || {};
+
+        // Ensure cloud sync finishes if logged into Firebase
+        if (window.FirebaseSync && typeof window.FirebaseSync.getCurrentUser === 'function') {
+          const user = window.FirebaseSync.getCurrentUser();
+          if (user && typeof window.FirebaseSync.pushAllToCloud === 'function') {
+            await window.FirebaseSync.pushAllToCloud(user.uid);
+          }
+        }
+
+        // Refresh all UI subsystems cleanly
+        if (typeof populateFormFromState === 'function') populateFormFromState();
+        if (typeof renderSavedBanksChecklist === 'function') renderSavedBanksChecklist();
+        if (typeof renderCustomerDatalist === 'function') renderCustomerDatalist();
+        if (typeof renderProductDatalist === 'function') renderProductDatalist();
+        if (typeof renderHistoryTable === 'function') renderHistoryTable();
+        if (typeof renderSalesTable === 'function') renderSalesTable();
+        if (typeof renderCatalogTableView === 'function') renderCatalogTableView();
+        if (typeof updateCatalogBadge === 'function') updateCatalogBadge();
+        if (typeof updateBuilderBadge === 'function') updateBuilderBadge();
+        if (typeof updateLivePreview === 'function') updateLivePreview();
+
+        showToast(`Data dipulihkan: ${s.invoices || 0} invoice, ${s.products || 0} produk, ${s.customers || 0} pelanggan, ${s.banks || 0} bank!`);
+      } else {
+        showToast('Format file cadangan tidak valid', 'error');
+      }
+      fileInput.value = '';
+    };
+    reader.readAsText(file);
+  }
+
   const btnExportData = document.getElementById('btn-export-backup');
   if (btnExportData) {
-    btnExportData.addEventListener('click', () => {
-      StorageService.exportDataJSON();
-      showToast('Cadangan data berhasil diunduh');
+    btnExportData.addEventListener('click', handleFullBackupExport);
+  }
+
+  const btnExportDropdown = document.getElementById('btn-dropdown-export-backup');
+  if (btnExportDropdown) {
+    btnExportDropdown.addEventListener('click', () => {
+      const dd = document.getElementById('firebase-account-dropdown');
+      if (dd) dd.classList.add('hidden');
+      handleFullBackupExport();
     });
   }
 
   const fileImportInput = document.getElementById('input-import-backup');
   if (fileImportInput) {
-    fileImportInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const ok = StorageService.importDataJSON(event.target.result);
-          if (ok) {
-            showToast('Data berhasil dipulihkan!');
-            if (typeof renderHistoryTable === 'function') renderHistoryTable();
-            location.reload();
-          } else {
-            showToast('Format file cadangan tidak valid', 'error');
-          }
-        };
-        reader.readAsText(file);
-      }
+    fileImportInput.addEventListener('change', (e) => handleFullBackupImport(e.target));
+  }
+
+  const fileImportDropdown = document.getElementById('input-dropdown-import-backup');
+  if (fileImportDropdown) {
+    fileImportDropdown.addEventListener('change', (e) => {
+      const dd = document.getElementById('firebase-account-dropdown');
+      if (dd) dd.classList.add('hidden');
+      handleFullBackupImport(e.target);
     });
   }
 

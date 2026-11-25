@@ -1,0 +1,13 @@
+/**
+ * InvoicePro - Firebase Project Configuration (Backend / Admin Only)
+ * Konfigurasi project Firebase invoicepro-fe3df sudah terpasang langsung.
+ */
+
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyC_SIE5lb3rsLbCGg9gYte40THkknYzaVI",
+  authDomain: "invoicepro-fe3df.firebaseapp.com",
+  projectId: "invoicepro-fe3df",
+  storageBucket: "invoicepro-fe3df.firebasestorage.app",
+  messagingSenderId: "266507996023",
+  appId: "1:266507996023:web:67100ccae09b39deb8ef72"
+};

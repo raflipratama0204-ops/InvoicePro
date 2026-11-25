@@ -99,8 +99,54 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Handle Backend Firebase Config (so users don't configure Firebase manually)
+  if (reqPath === '/api/firebase-config') {
+    let fbConfig = null;
+    if (process.env.FIREBASE_API_KEY && process.env.FIREBASE_PROJECT_ID) {
+      fbConfig = {
+        apiKey: process.env.FIREBASE_API_KEY,
+        authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT_ID}.firebaseapp.com`,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        storageBucket: process.env.FIREBASE_STORAGE_BUCKET || '',
+        messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+        appId: process.env.FIREBASE_APP_ID || ''
+      };
+    } else {
+      const configPath = path.join(BASE_DIR, 'firebase-config.json');
+      if (fs.existsSync(configPath)) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          if (parsed && parsed.apiKey && parsed.projectId) {
+            fbConfig = parsed;
+          }
+        } catch (e) { }
+      }
+    }
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end(JSON.stringify({ configured: Boolean(fbConfig), config: fbConfig }));
+    return;
+  }
+
   if (reqPath === '/' || reqPath === '') {
     reqPath = '/index.html';
+  }
+
+  // Block direct static download of backend/rules/hidden files
+  const baseName = path.basename(reqPath).toLowerCase();
+  if (
+    baseName.startsWith('.') ||
+    baseName === 'firebase-config.json' ||
+    baseName === 'firestore.rules' ||
+    baseName === 'server.js' ||
+    baseName === 'package.json'
+  ) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('Access Denied');
+    return;
   }
 
   const safePath = path.normalize(path.join(BASE_DIR, reqPath));
