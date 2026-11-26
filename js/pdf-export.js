@@ -1,12 +1,12 @@
 /**
  * InvoicePro - PDF Export and Print Engine
- * Optimized for Zero-Mistake, Pixel-Perfect A4 Rendering
+ * Supports single & multi-page A4 invoices across Chrome, Firefox, Zen, and mobile browsers.
  */
 
 class PDFExportService {
   /**
-   * Export the invoice preview element to a PDF file with zero cut-off
-   * @param {HTMLElement} element - The invoice sheet DOM element
+   * Export one or more A4 invoice pages to a crisp multi-page PDF file
+   * @param {HTMLElement} element - Page 1 invoice sheet DOM element (#invoice-preview-sheet)
    * @param {Object} options - Metadata for filename and settings
    */
   static async exportToPDF(element, options = {}) {
@@ -21,127 +21,182 @@ class PDFExportService {
       .trim();
     const filename = `Invoice_${invoiceNo}_${clientName}.pdf`;
 
-    // Check if html2pdf is available
     if (typeof html2pdf === 'undefined') {
       console.warn('html2pdf library tidak ditemukan. Menggunakan dialog cetak browser sebagai alternatif.');
       window.print();
       return;
     }
 
-    // 1. Create a dedicated off-screen fixed-width rendering stage
-    // Fixed width 794px and height 1120px corresponds to 210mm x 297mm at 96 DPI (Standard 1-page A4).
-    // Placed far off-screen (-10000px) so the user never sees any visual glitch or background flicker during download.
+    // Build an off-screen invisible capture stage so nothing ever bleeds behind the app UI during export
     const stage = document.createElement('div');
     stage.id = 'pdf-isolated-stage';
-    stage.style.cssText = `
-      position: fixed !important;
-      left: -10000px !important;
-      top: -10000px !important;
-      width: 794px !important;
-      height: 1120px !important;
-      max-height: 1120px !important;
-      z-index: -99999 !important;
-      background: #ffffff !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      box-sizing: border-box !important;
-      overflow: hidden !important;
-      pointer-events: none !important;
-    `;
+    stage.style.position = 'fixed';
+    stage.style.left = '-12000px';
+    stage.style.top = '0px';
+    stage.style.width = '794px';
+    stage.style.opacity = '0';
+    stage.style.zIndex = '-99999';
+    stage.style.background = '#ffffff';
+    stage.style.margin = '0';
+    stage.style.padding = '0';
+    stage.style.boxSizing = 'border-box';
+    stage.style.pointerEvents = 'none';
 
-    // 2. Clone the invoice sheet node
-    const clone = element.cloneNode(true);
-
-    // 3. Normalize all styles on the clone to ensure compact single-page layout
-    clone.style.transform = 'none';
-    clone.style.boxShadow = 'none';
-    clone.style.borderRadius = '0';
-    clone.style.width = '794px';
-    clone.style.maxWidth = '794px';
-    clone.style.minWidth = '794px';
-    clone.style.height = '1120px';
-    clone.style.maxHeight = '1120px';
-    clone.style.margin = '0';
-    clone.style.padding = '10mm 14mm 8mm 14mm';
-    clone.style.boxSizing = 'border-box';
-    clone.style.overflow = 'hidden';
-
-    // Re-apply the active theme attribute so CSS variables match exactly
     const activeTheme = document.body.getAttribute('data-theme') || 'dark';
     stage.setAttribute('data-theme', activeTheme);
-
-    stage.appendChild(clone);
     document.body.appendChild(stage);
 
-    // 4. Configure html2pdf with margin 0 and pixel-perfect 1-page A4 coordinate lock
-    const opt = {
-      margin: 0, // No extra PDF margin since internal padding (14mm) provides exact page margins
-      filename: filename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: {
-        scale: 2,           // 2x scale for sharp 192 DPI print quality
-        useCORS: true,
-        letterRendering: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        x: 0,               // Lock capture X to 0 to prevent left-side cut-off
-        y: 0,               // Lock capture Y to 0
-        width: 794,         // Exact 794px width (prevents right-side cut-off)
-        height: 1120,       // Exact 1120px height (prevents page 2 overflow)
-        windowWidth: 794,   // Match windowWidth to capture width so margin:auto doesn't offset
-        windowHeight: 1120, // Match windowHeight to capture height
-        scrollX: 0,
-        scrollY: 0,
-        onclone: (clonedDoc) => {
-          // Align html2pdf internal wrapper elements to (0,0) to eliminate any browser centering shift
-          const overlay = clonedDoc.querySelector('.html2pdf__overlay');
-          if (overlay) {
-            overlay.style.position = 'absolute';
-            overlay.style.left = '0';
-            overlay.style.top = '0';
-            overlay.style.width = '794px';
-            overlay.style.height = '1120px';
-            overlay.style.margin = '0';
-            overlay.style.padding = '0';
-          }
-          const container = clonedDoc.querySelector('.html2pdf__container');
-          if (container) {
-            container.style.position = 'absolute';
-            container.style.left = '0';
-            container.style.top = '0';
-            container.style.width = '794px';
-            container.style.height = '1120px';
-            container.style.margin = '0';
-            container.style.padding = '0';
-          }
-          const isolatedStage = clonedDoc.getElementById('pdf-isolated-stage');
-          if (isolatedStage) {
-            isolatedStage.style.position = 'absolute';
-            isolatedStage.style.left = '0';
-            isolatedStage.style.top = '0';
-            isolatedStage.style.margin = '0';
-            isolatedStage.style.width = '794px';
-            isolatedStage.style.height = '1120px';
-          }
+    function normalizePageClone(pageNode) {
+      pageNode.style.transform = 'none';
+      pageNode.style.boxShadow = 'none';
+      pageNode.style.borderRadius = '0';
+      pageNode.style.width = '794px';
+      pageNode.style.maxWidth = '794px';
+      pageNode.style.minWidth = '794px';
+      pageNode.style.height = '1120px';
+      pageNode.style.minHeight = '1120px';
+      pageNode.style.maxHeight = '1120px';
+      pageNode.style.margin = '0';
+      pageNode.style.padding = '10mm 14mm 8mm 14mm';
+      pageNode.style.boxSizing = 'border-box';
+      pageNode.style.overflow = 'hidden';
+
+      // Remove empty/hidden <img> tags (e.g. <img src="">) which can stall html2canvas in Firefox/Zen
+      pageNode.querySelectorAll('img').forEach(img => {
+        const rawSrc = img.getAttribute('src');
+        if (!rawSrc || rawSrc.trim() === '' || img.classList.contains('hidden')) {
+          img.parentNode && img.parentNode.removeChild(img);
         }
-      },
-      jsPDF: {
-        unit: 'mm',
-        format: 'a4',
-        orientation: 'portrait'
-      },
-      pagebreak: { mode: 'avoid-all' }
-    };
+      });
+
+      return pageNode;
+    }
+
+    async function waitForImages(node) {
+      const imgs = Array.from(node.querySelectorAll('img'));
+      await Promise.all(imgs.map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise(res => {
+          img.onload = res;
+          img.onerror = res;
+          setTimeout(res, 1500);
+        });
+      }));
+    }
+
+    function createPageOptions() {
+      return {
+        margin: 0,
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          letterRendering: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          x: 0,
+          y: 0,
+          width: 794,
+          height: 1120,
+          windowWidth: 794,
+          windowHeight: 1120,
+          scrollX: 0,
+          scrollY: 0,
+          onclone: (clonedDoc) => {
+            const clonedStage = clonedDoc.getElementById('pdf-isolated-stage');
+            if (clonedStage) {
+              clonedStage.style.display = 'none';
+            }
+            const overlay = clonedDoc.querySelector('.html2pdf__overlay');
+            if (overlay) {
+              overlay.style.position = 'absolute';
+              overlay.style.left = '0px';
+              overlay.style.top = '0px';
+              overlay.style.width = '794px';
+              overlay.style.height = '1120px';
+              overlay.style.margin = '0';
+              overlay.style.padding = '0';
+              overlay.style.opacity = '1';
+              overlay.style.overflow = 'visible';
+              overlay.style.backgroundColor = '#ffffff';
+              overlay.style.zIndex = '999999';
+            }
+            const container = clonedDoc.querySelector('.html2pdf__container');
+            if (container) {
+              container.style.position = 'absolute';
+              container.style.left = '0px';
+              container.style.top = '0px';
+              container.style.width = '794px';
+              container.style.height = '1120px';
+              container.style.margin = '0';
+              container.style.padding = '0';
+              container.style.backgroundColor = '#ffffff';
+            }
+          }
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait'
+        }
+      };
+    }
 
     try {
-      // Small pause to allow DOM to finish layout computation
-      await new Promise(resolve => setTimeout(resolve, 100));
-      await html2pdf().set(opt).from(clone).save();
+      const clonePage1 = normalizePageClone(element.cloneNode(true));
+      const stageExtraContainer = document.createElement('div');
+      stageExtraContainer.id = 'pdf-stage-extra-pages';
+
+      const liveExtraPages = document.getElementById('invoice-extra-pages');
+      const liveExtraCount = liveExtraPages ? liveExtraPages.querySelectorAll('.invoice-sheet').length : 0;
+
+      let pagesToCapture = [];
+
+      if (element.getClientRects().length === 0 && typeof window.paginateInvoicePages === 'function') {
+        stage.appendChild(clonePage1);
+        stage.appendChild(stageExtraContainer);
+        await new Promise(resolve => setTimeout(resolve, 60));
+        window.paginateInvoicePages(clonePage1, stageExtraContainer);
+        pagesToCapture = [
+          normalizePageClone(clonePage1),
+          ...Array.from(stageExtraContainer.querySelectorAll('.invoice-sheet')).map(normalizePageClone)
+        ];
+      } else {
+        pagesToCapture.push(clonePage1);
+        if (liveExtraCount > 0) {
+          liveExtraPages.querySelectorAll('.invoice-sheet').forEach(extraPage => {
+            pagesToCapture.push(normalizePageClone(extraPage.cloneNode(true)));
+          });
+        }
+      }
+
+      // Render Page 1 into jsPDF instance
+      stage.innerHTML = '';
+      stage.style.height = '1120px';
+      stage.appendChild(pagesToCapture[0]);
+      await waitForImages(pagesToCapture[0]);
+      await new Promise(resolve => setTimeout(resolve, 80));
+
+      const pdf = await html2pdf().set(createPageOptions()).from(pagesToCapture[0]).toPdf().get('pdf');
+
+      // Render Page 2..N sequentially at exact (0,0) and append to the same PDF
+      for (let i = 1; i < pagesToCapture.length; i++) {
+        stage.innerHTML = '';
+        stage.appendChild(pagesToCapture[i]);
+        await waitForImages(pagesToCapture[i]);
+        await new Promise(resolve => setTimeout(resolve, 60));
+
+        const imgData = await html2pdf().set(createPageOptions()).from(pagesToCapture[i]).outputImg('datauristring');
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+      }
+
+      pdf.save(filename);
     } catch (err) {
       console.error('Error saat membuat PDF:', err);
       throw err;
     } finally {
-      // Always remove the temporary stage
       if (stage && stage.parentNode) {
         stage.parentNode.removeChild(stage);
       }

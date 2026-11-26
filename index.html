@@ -15,7 +15,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   
   <!-- Custom Stylesheet & Print A4 Rules -->
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=1.0.6">
   
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -512,6 +512,7 @@
             <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             Pratinjau Langsung (A4)
           </span>
+          <span id="preview-page-count" class="text-[10.5px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">1 Halaman</span>
         </div>
 
         <div class="flex items-center gap-2">
@@ -524,13 +525,13 @@
 
       <!-- A4 Sheet Container -->
       <div class="invoice-sheet-container w-full">
-        <div id="invoice-preview-sheet" class="invoice-sheet">
+        <div id="invoice-preview-sheet" class="invoice-sheet is-last-page">
           
           <!-- Watermark Stamp (LUNAS / UNPAID) -->
           <div id="pv-stamp-watermark" class="stamp-watermark paid">LUNAS</div>
 
           <!-- TOP: Header & Meta -->
-          <div>
+          <div id="pv-top-content">
             <!-- Header Row -->
             <div class="flex justify-between items-start border-b-2 border-slate-100 pb-2.5 mb-2.5 gap-4">
               <!-- Left: Store / Company Info -->
@@ -596,7 +597,7 @@
             </div>
 
             <!-- Items Table -->
-            <table class="invoice-table">
+            <table id="pv-items-table" class="invoice-table">
               <thead>
                 <tr>
                   <th style="width: 4%;" class="text-center">No</th>
@@ -613,7 +614,7 @@
             </table>
 
             <!-- Summary & Terbilang -->
-            <div class="flex justify-between items-start gap-3 mt-2">
+            <div id="pv-summary-block" class="flex justify-between items-start gap-3 mt-2">
               <!-- Left: Terbilang & Catatan Singkat -->
               <div class="w-[50%] max-w-[50%]">
                 <div class="terbilang-box mb-2">
@@ -680,7 +681,7 @@
             </div>
 
             <!-- Notes & Terms Box -->
-            <div class="grid grid-cols-2 gap-3 mt-2 pt-1.5 border-t border-slate-200 text-[8.5px] leading-tight">
+            <div id="pv-notes-terms-block" class="grid grid-cols-2 gap-3 mt-2 pt-1.5 border-t border-slate-200 text-[8.5px] leading-tight">
               <div id="pv-notes-box">
                 <span class="font-bold text-slate-700 block text-[8.5px] mb-0.5">Catatan:</span>
                 <p id="pv-notes" class="text-slate-500 text-[8px] leading-snug"></p>
@@ -693,7 +694,7 @@
           </div>
 
           <!-- BOTTOM: Signatures & Thank you footer -->
-          <div class="pt-2 mt-2 border-t border-slate-200">
+          <div id="pv-signature-block" class="pt-2 mt-2 border-t border-slate-200">
             <div class="flex justify-between items-end">
               
               <!-- Left footer notice -->
@@ -714,9 +715,16 @@
             </div>
           </div>
 
+          <!-- Page Number Footer (visible when multi-page) -->
+          <div class="pv-page-footer hidden text-[8.5px] text-slate-400 text-right pt-1 font-medium">
+            Halaman 1 dari 1
           </div>
         </div>
+
+        <!-- Extra A4 Pages Container (Auto-generated when items exceed 1 page) -->
+        <div id="invoice-extra-pages" class="flex flex-col items-center gap-6 w-full"></div>
       </div>
+    </div>
     </div>
     <!-- END VIEW 1: Pembuat Invoice -->
 
@@ -1435,22 +1443,22 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 
   <!-- Application Storage & Services -->
-  <script src="js/firebase-config.js?v=1.0.3"></script>
-  <script src="js/storage.js?v=1.0.3"></script>
-  <script src="js/pdf-export.js?v=1.0.3"></script>
+  <script src="js/firebase-config.js?v=1.0.5"></script>
+  <script src="js/storage.js?v=1.0.5"></script>
+  <script src="js/pdf-export.js?v=1.0.6"></script>
 
   <!-- Modular Application Subsystems -->
-  <script src="js/modules/formatters.js?v=1.0.3"></script>
-  <script src="js/modules/dialogs.js?v=1.0.3"></script>
-  <script src="js/modules/preview.js?v=1.0.3"></script>
-  <script src="js/modules/catalog.js?v=1.0.3"></script>
-  <script src="js/modules/sales.js?v=1.0.3"></script>
-  <script src="js/modules/master-data.js?v=1.0.3"></script>
-  <script src="js/modules/updater.js?v=1.0.3"></script>
-  <script src="js/modules/firebase-sync.js?v=1.0.3"></script>
+  <script src="js/modules/formatters.js?v=1.0.5"></script>
+  <script src="js/modules/dialogs.js?v=1.0.5"></script>
+  <script src="js/modules/preview.js?v=1.0.6"></script>
+  <script src="js/modules/catalog.js?v=1.0.5"></script>
+  <script src="js/modules/sales.js?v=1.0.5"></script>
+  <script src="js/modules/master-data.js?v=1.0.5"></script>
+  <script src="js/modules/updater.js?v=1.0.5"></script>
+  <script src="js/modules/firebase-sync.js?v=1.0.5"></script>
 
   <!-- Core App Controller & Lifecycle -->
-  <script src="js/app.js?v=1.0.3"></script>
+  <script src="js/app.js?v=1.0.5"></script>
 
 </body>
 </html>

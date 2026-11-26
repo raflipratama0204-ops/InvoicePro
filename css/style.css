@@ -108,8 +108,10 @@ body {
   overflow-x: auto;
   padding: 1.5rem 1rem;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 1.5rem;
   min-height: calc(100vh - 80px);
   background-color: #64748b15;
   width: 100%;
@@ -118,8 +120,8 @@ body {
 .invoice-sheet {
   width: 794px; /* Exact 210mm at 96 DPI for 1:1 A4 pixel-perfection */
   max-width: 794px;
-  height: 1120px; /* Exact 297mm A4 proportion at 96 DPI - strictly 1 page */
-  max-height: 1120px;
+  min-height: 1120px;
+  height: 1120px; /* Each individual A4 sheet page is 794x1120 */
   padding: 10mm 14mm 8mm 14mm;
   background: #ffffff;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
@@ -127,11 +129,23 @@ body {
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
   transform-origin: top center;
   transition: transform 0.2s ease;
   box-sizing: border-box;
-  overflow: hidden; /* Guarantee 1-page only, zero spillover */
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.invoice-sheet #pv-top-content,
+.invoice-sheet .pv-page-top-content {
+  flex-shrink: 0;
+  margin-bottom: auto;
+}
+
+.invoice-sheet #pv-signature-block,
+.invoice-sheet .pv-page-footer {
+  flex-shrink: 0;
 }
 
 /* Watermark Stamp: LUNAS / PAID */
@@ -415,6 +429,12 @@ body {
     width: 100% !important;
   }
 
+  #invoice-extra-pages {
+    display: block !important;
+    gap: 0 !important;
+    width: 100% !important;
+  }
+
   .invoice-sheet {
     box-shadow: none !important;
     border: none !important;
@@ -425,10 +445,16 @@ body {
     padding: 10mm 14mm 8mm 14mm !important;
     margin: 0 auto !important;
     transform: none !important;
-    page-break-after: avoid !important;
+    page-break-after: always !important;
+    break-after: page !important;
     page-break-inside: avoid !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
+  }
+
+  .invoice-sheet.is-last-page {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   .stamp-watermark {

@@ -67,10 +67,256 @@ function calculateFinancials() {
   };
 }
 
+// Reset multi-page layout back to Page 1 before re-populating preview
+function resetInvoicePagination(page1Sheet, extraContainer) {
+  if (!page1Sheet) return;
+  const findBlock = (sel) => page1Sheet.querySelector(sel) || (extraContainer ? extraContainer.querySelector(sel) : null);
+
+  const topContent = page1Sheet.querySelector('#pv-top-content');
+  const summaryBlock = findBlock('#pv-summary-block');
+  const notesTermsBlock = findBlock('#pv-notes-terms-block');
+  const signatureBlock = findBlock('#pv-signature-block');
+  const pageFooter = page1Sheet.querySelector('.pv-page-footer');
+
+  if (topContent) {
+    if (summaryBlock) topContent.appendChild(summaryBlock);
+    if (notesTermsBlock) topContent.appendChild(notesTermsBlock);
+  }
+  if (signatureBlock) {
+    if (pageFooter && pageFooter.parentNode === page1Sheet) {
+      page1Sheet.insertBefore(signatureBlock, pageFooter);
+    } else {
+      page1Sheet.appendChild(signatureBlock);
+    }
+  }
+  if (extraContainer) {
+    extraContainer.innerHTML = '';
+  }
+  page1Sheet.classList.add('is-last-page');
+  if (pageFooter) pageFooter.classList.add('hidden');
+}
+
+// Create an A4 continuation sheet for overflowing rows or footer
+function createContinuationPage(pageNumber, page1Sheet, theadEl, includeTable = true) {
+  const page = document.createElement('div');
+  page.className = 'invoice-sheet invoice-extra-page';
+
+  const storeName = page1Sheet.querySelector('#pv-store-name')?.textContent || 'INVOICE';
+  const invoiceNo = page1Sheet.querySelector('#pv-invoice-number')?.textContent || '';
+
+  const topContent = document.createElement('div');
+  topContent.className = 'pv-page-top-content';
+
+  const headerHtml = `
+    <div class="flex justify-between items-center border-b-2 border-slate-100 pb-2 mb-3">
+      <div>
+        <div class="font-extrabold text-sm text-slate-900">${escapeHtml(storeName)}</div>
+        <div class="text-[9.5px] text-slate-500">Lanjutan Rincian Invoice</div>
+      </div>
+      <div class="text-right">
+        <div class="text-xs font-black text-blue-600 tracking-wider uppercase">INVOICE (LANJUTAN)</div>
+        <div class="text-[10px] font-mono font-bold text-slate-800">${escapeHtml(invoiceNo)}</div>
+      </div>
+    </div>
+  `;
+  topContent.innerHTML = headerHtml;
+
+  let tbody = null;
+  let table = null;
+  if (includeTable && theadEl) {
+    table = document.createElement('table');
+    table.className = 'invoice-table';
+    table.appendChild(theadEl.cloneNode(true));
+    tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+    topContent.appendChild(table);
+  }
+
+  const pageFooter = document.createElement('div');
+  pageFooter.className = 'pv-page-footer text-[8.5px] text-slate-400 text-right pt-1 font-medium';
+  pageFooter.textContent = `Halaman ${pageNumber}`;
+
+  page.appendChild(topContent);
+  page.appendChild(pageFooter);
+
+  return { page, topContent, table, tbody, pageFooter };
+}
+
+// Automatically split overflowing items / footer across multiple A4 pages
+function paginateInvoicePages(page1Sheet, extraContainer) {
+  if (!page1Sheet || !extraContainer) return 1;
+
+  resetInvoicePagination(page1Sheet, extraContainer);
+
+  // Skip live DOM height calculation if preview is hidden (e.g., Data Penjualan tab or mobile form tab)
+  if (page1Sheet.getClientRects().length === 0) {
+    return 1;
+  }
+
+  const topContent = page1Sheet.querySelector('#pv-top-content');
+  const tableEl = page1Sheet.querySelector('#pv-items-table');
+  const theadEl = tableEl ? tableEl.querySelector('thead') : null;
+  const tbody = page1Sheet.querySelector('#pv-table-body');
+  const summaryBlock = page1Sheet.querySelector('#pv-summary-block');
+  const notesTermsBlock = page1Sheet.querySelector('#pv-notes-terms-block');
+  const signatureBlock = page1Sheet.querySelector('#pv-signature-block');
+
+  if (!topContent || !tableEl || !tbody) return 1;
+
+  // Measure unscaled natural height of Page 1 (disable transform & transition so measurements are 100% exact)
+  const prevTransform = page1Sheet.style.transform;
+  const prevTransition = page1Sheet.style.transition;
+  const prevMarginBottom = page1Sheet.style.marginBottom;
+  page1Sheet.style.transition = 'none';
+  page1Sheet.style.transform = 'none';
+  page1Sheet.style.marginBottom = '0px';
+  page1Sheet.style.minHeight = '0px';
+  page1Sheet.style.maxHeight = 'none';
+  page1Sheet.style.height = 'auto';
+
+  const naturalHeight = page1Sheet.scrollHeight;
+
+  const updateToolbarPageBadge = (count) => {
+    if (page1Sheet.id === 'invoice-preview-sheet') {
+      const badge = document.getElementById('preview-page-count');
+      if (badge) badge.textContent = `${count} Halaman`;
+    }
+  };
+
+  if (naturalHeight <= 1120) {
+    page1Sheet.style.minHeight = '';
+    page1Sheet.style.maxHeight = '';
+    page1Sheet.style.height = '1120px';
+    page1Sheet.style.transform = prevTransform;
+    page1Sheet.style.marginBottom = prevMarginBottom;
+    // Restore transition after layout settles
+    void page1Sheet.offsetHeight;
+    page1Sheet.style.transition = prevTransition;
+    updateToolbarPageBadge(1);
+    return 1;
+  }
+
+  // Content exceeds 1 A4 page -> show page footer early so its height is accurately included
+  const p1Footer = page1Sheet.querySelector('.pv-page-footer');
+  if (p1Footer) {
+    p1Footer.textContent = 'Halaman 1';
+    p1Footer.classList.remove('hidden');
+  }
+
+  // Detach footer blocks temporarily and split item rows across pages
+  if (summaryBlock && summaryBlock.parentNode) summaryBlock.parentNode.removeChild(summaryBlock);
+  if (notesTermsBlock && notesTermsBlock.parentNode) notesTermsBlock.parentNode.removeChild(notesTermsBlock);
+  if (signatureBlock && signatureBlock.parentNode) signatureBlock.parentNode.removeChild(signatureBlock);
+
+  const allRows = Array.from(tbody.querySelectorAll('tr'));
+  tbody.innerHTML = '';
+
+  const MAX_PAGE_HEIGHT = 1112; // 1120px A4 minus 8px safety margin
+  const pagesList = [{ page: page1Sheet, topContent }];
+
+  let currentPage = page1Sheet;
+  let currentTopContent = topContent;
+  let currentTable = tableEl;
+  let currentTbody = tbody;
+  let rowsInCurrentPage = 0;
+
+  for (let i = 0; i < allRows.length; i++) {
+    const row = allRows[i];
+    currentTbody.appendChild(row);
+
+    // Measure unscaled natural height (scrollHeight is immune to CSS zoom transform)
+    const contentHeight = currentPage.scrollHeight;
+    if (contentHeight > MAX_PAGE_HEIGHT && rowsInCurrentPage > 0) {
+      currentTbody.removeChild(row);
+      currentPage.style.minHeight = '';
+      currentPage.style.maxHeight = '';
+      currentPage.style.height = '1120px';
+
+      const nextPageObj = createContinuationPage(pagesList.length + 1, page1Sheet, theadEl, true);
+      extraContainer.appendChild(nextPageObj.page);
+      nextPageObj.page.style.minHeight = '0px';
+      nextPageObj.page.style.maxHeight = 'none';
+      nextPageObj.page.style.height = 'auto';
+
+      pagesList.push({ page: nextPageObj.page, topContent: nextPageObj.topContent });
+      currentPage = nextPageObj.page;
+      currentTopContent = nextPageObj.topContent;
+      currentTable = nextPageObj.table;
+      currentTbody = nextPageObj.tbody;
+
+      currentTbody.appendChild(row);
+      rowsInCurrentPage = 1;
+    } else {
+      rowsInCurrentPage++;
+    }
+  }
+
+  // Re-attach Summary, Notes/Terms, and Signature onto the current last page and check overflow
+  if (summaryBlock) currentTopContent.appendChild(summaryBlock);
+  if (notesTermsBlock) currentTopContent.appendChild(notesTermsBlock);
+  if (signatureBlock) {
+    const curFooter = currentPage.querySelector('.pv-page-footer');
+    if (curFooter && curFooter.parentNode === currentPage) {
+      currentPage.insertBefore(signatureBlock, curFooter);
+    } else {
+      currentPage.appendChild(signatureBlock);
+    }
+  }
+
+  const finalPageHeight = currentPage.scrollHeight;
+  currentPage.style.minHeight = '';
+  currentPage.style.maxHeight = '';
+  currentPage.style.height = '1120px';
+
+  // If the summary + signature footer doesn't fit below the remaining rows, move footer to one clean final page
+  if (finalPageHeight > MAX_PAGE_HEIGHT) {
+    const footerPageObj = createContinuationPage(pagesList.length + 1, page1Sheet, theadEl, false);
+    extraContainer.appendChild(footerPageObj.page);
+    if (summaryBlock) footerPageObj.topContent.appendChild(summaryBlock);
+    if (notesTermsBlock) footerPageObj.topContent.appendChild(notesTermsBlock);
+    if (signatureBlock) {
+      footerPageObj.page.insertBefore(signatureBlock, footerPageObj.pageFooter);
+    }
+    pagesList.push({ page: footerPageObj.page, topContent: footerPageObj.topContent });
+  }
+
+  // Update page footers ("Halaman X dari N") and print break markers
+  const totalPages = pagesList.length;
+  pagesList.forEach((pObj, idx) => {
+    pObj.page.style.minHeight = '';
+    pObj.page.style.maxHeight = '';
+    pObj.page.style.height = '1120px';
+    pObj.page.classList.toggle('is-last-page', idx === totalPages - 1);
+    const footerEl = pObj.page.querySelector('.pv-page-footer');
+    if (footerEl) {
+      footerEl.textContent = `Halaman ${idx + 1} dari ${totalPages}`;
+      footerEl.classList.remove('hidden');
+    }
+  });
+
+  page1Sheet.style.transform = prevTransform;
+  page1Sheet.style.marginBottom = prevMarginBottom;
+  void page1Sheet.offsetHeight;
+  page1Sheet.style.transition = prevTransition;
+  updateToolbarPageBadge(totalPages);
+
+  if (page1Sheet.id === 'invoice-preview-sheet' && typeof window.applyPreviewZoom === 'function') {
+    window.applyPreviewZoom();
+  }
+
+  return totalPages;
+}
+
 // Update the Live Preview Sheet on the Right Side
 function updateLivePreview() {
   const inv = window.currentInvoice;
   if (!inv) return;
+
+  // Ensure Page 1 blocks are restored before updating DOM values
+  const page1Sheet = document.getElementById('invoice-preview-sheet');
+  const extraContainer = document.getElementById('invoice-extra-pages');
+  resetInvoicePagination(page1Sheet, extraContainer);
+
   const totals = calculateFinancials();
 
   // Theme application
@@ -317,6 +563,26 @@ function updateLivePreview() {
       elSignImg.classList.add('hidden');
     }
   }
+
+  // Automatically paginate to Page 2, 3, ... if items overflow A4 height
+  paginateInvoicePages(
+    document.getElementById('invoice-preview-sheet'),
+    document.getElementById('invoice-extra-pages')
+  );
+}
+
+// Apply active zoom factor to ALL A4 sheets (Page 1 + Extra Pages)
+function applyPreviewZoom() {
+  const zoom = window.currentZoom || 1;
+  const sheets = document.querySelectorAll('.invoice-sheet-container .invoice-sheet');
+  sheets.forEach(s => {
+    s.style.transform = `scale(${zoom})`;
+    // Compensate layout vertical space when zoomed out so extra pages stay neatly spaced
+    const baseHeight = s.offsetHeight || 1120;
+    s.style.marginBottom = zoom < 1 ? `${Math.round((zoom - 1) * baseHeight)}px` : '0px';
+  });
+  const zoomText = document.getElementById('zoom-percentage');
+  if (zoomText) zoomText.textContent = `${Math.round(zoom * 100)}%`;
 }
 
 // Setup Zoom & Auto-Fit Controls for Preview
@@ -335,27 +601,19 @@ function setupPreviewZoomControls() {
     } else {
       window.currentZoom = 1;
     }
-    applyZoom();
-  }
-
-  function applyZoom() {
-    if (sheet) {
-      sheet.style.transform = `scale(${window.currentZoom || 1})`;
-      const zoomText = document.getElementById('zoom-percentage');
-      if (zoomText) zoomText.textContent = `${Math.round((window.currentZoom || 1) * 100)}%`;
-    }
+    applyPreviewZoom();
   }
 
   if (btnZoomIn && sheet) {
     btnZoomIn.addEventListener('click', () => {
       window.currentZoom = Math.min((window.currentZoom || 1) + 0.1, 1.4);
-      applyZoom();
+      applyPreviewZoom();
     });
   }
   if (btnZoomOut && sheet) {
     btnZoomOut.addEventListener('click', () => {
       window.currentZoom = Math.max((window.currentZoom || 1) - 0.1, 0.4);
-      applyZoom();
+      applyPreviewZoom();
     });
   }
   if (btnZoomReset && sheet) {
@@ -367,11 +625,13 @@ function setupPreviewZoomControls() {
   setTimeout(autoFitZoom, 400);
 
   // Return helper methods
-  return { autoFitZoom, applyZoom };
+  return { autoFitZoom, applyZoom: applyPreviewZoom };
 }
 
 // Global Exports
 window.calculateFinancials = calculateFinancials;
 window.updateLivePreview = updateLivePreview;
+window.paginateInvoicePages = paginateInvoicePages;
+window.applyPreviewZoom = applyPreviewZoom;
 window.setupPreviewZoomControls = setupPreviewZoomControls;
 
