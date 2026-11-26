@@ -7,6 +7,43 @@
 window.currentInvoice = null;
 window.signaturePad = null;
 window.currentZoom = 1;
+window.isItemsSectionCollapsed = false;
+
+function updateItemsSectionSummary() {
+  const items = Array.isArray(window.currentInvoice?.items) ? window.currentInvoice.items : [];
+  const countBadge = document.getElementById('items-section-count-badge');
+  const summaryText = document.getElementById('items-collapsed-summary-text');
+
+  if (countBadge) {
+    countBadge.textContent = `${items.length} Item`;
+  }
+
+  if (summaryText) {
+    let subtotal = 0;
+    items.forEach(it => {
+      const q = parseFloat(it.qty) || 0;
+      const p = parseFloat(it.price) || 0;
+      const d = parseFloat(it.discount) || 0;
+      subtotal += Math.max((q * p) - d, 0);
+    });
+    const subtotalText = typeof formatRupiah === 'function' ? formatRupiah(subtotal) : `Rp ${subtotal}`;
+    summaryText.textContent = `${items.length} barang/jasa · Subtotal ${subtotalText}`;
+  }
+}
+
+function setItemsSectionCollapsed(collapsed) {
+  window.isItemsSectionCollapsed = Boolean(collapsed);
+  const bodyEl = document.getElementById('items-section-body');
+  const summaryEl = document.getElementById('items-collapsed-summary');
+  const chevronEl = document.getElementById('items-toggle-chevron');
+  const labelEl = document.getElementById('items-toggle-label');
+
+  if (bodyEl) bodyEl.classList.toggle('hidden', window.isItemsSectionCollapsed);
+  if (summaryEl) summaryEl.classList.toggle('hidden', !window.isItemsSectionCollapsed);
+  if (chevronEl) chevronEl.classList.toggle('-rotate-90', window.isItemsSectionCollapsed);
+  if (labelEl) labelEl.textContent = window.isItemsSectionCollapsed ? 'Buka' : 'Lipat';
+  updateItemsSectionSummary();
+}
 
 // Document Ready Bootstrapper
 document.addEventListener('DOMContentLoaded', () => {
@@ -279,6 +316,7 @@ function renderFormItems() {
 
       const newSubtotal = (item.qty * item.price) - (item.discount || 0);
       itemRow.querySelector('.item-subtotal').textContent = formatRupiah(newSubtotal);
+      updateItemsSectionSummary();
       if (typeof updateLivePreview === 'function') updateLivePreview();
     };
 
@@ -286,6 +324,7 @@ function renderFormItems() {
       item.price = val;
       const newSubtotal = (item.qty * item.price) - (item.discount || 0);
       itemRow.querySelector('.item-subtotal').textContent = formatRupiah(newSubtotal);
+      updateItemsSectionSummary();
       if (typeof updateLivePreview === 'function') updateLivePreview();
     });
 
@@ -293,6 +332,7 @@ function renderFormItems() {
       item.discount = val;
       const newSubtotal = (item.qty * item.price) - (item.discount || 0);
       itemRow.querySelector('.item-subtotal').textContent = formatRupiah(newSubtotal);
+      updateItemsSectionSummary();
       if (typeof updateLivePreview === 'function') updateLivePreview();
     });
 
@@ -360,6 +400,7 @@ function renderFormItems() {
       suggestDropdown.classList.add('hidden');
       const newSubtotal = (item.qty * item.price) - (item.discount || 0);
       itemRow.querySelector('.item-subtotal').textContent = formatRupiah(newSubtotal);
+      updateItemsSectionSummary();
       if (typeof updateLivePreview === 'function') updateLivePreview();
       showToast(`Barang "${p.name}" dipilih dari katalog: Harga otomatis diisi ✓`, 'success');
     };
@@ -420,6 +461,7 @@ function renderFormItems() {
 
     container.appendChild(itemRow);
   });
+  updateItemsSectionSummary();
   if (typeof updateBuilderBadge === 'function') updateBuilderBadge();
 }
 
@@ -798,11 +840,42 @@ function setupEventListeners() {
   bindInput('input-client-address', (val) => { if (window.currentInvoice) window.currentInvoice.client.address = val; });
   bindInput('input-shipping-address', (val) => { if (window.currentInvoice) window.currentInvoice.client.shippingAddress = val; });
 
+  // Collapsible Items Section (Dropdown toggle for long item lists)
+  const btnToggleItemsHeader = document.getElementById('btn-toggle-items-header');
+  const btnToggleItemsSection = document.getElementById('btn-toggle-items-section');
+  const btnCollapseItemsBottom = document.getElementById('btn-collapse-items-bottom');
+  const itemsCollapsedSummary = document.getElementById('items-collapsed-summary');
+
+  [btnToggleItemsHeader, btnToggleItemsSection].forEach(el => {
+    if (el) {
+      el.addEventListener('click', () => {
+        setItemsSectionCollapsed(!window.isItemsSectionCollapsed);
+      });
+    }
+  });
+
+  if (btnCollapseItemsBottom) {
+    btnCollapseItemsBottom.addEventListener('click', () => {
+      setItemsSectionCollapsed(true);
+      const card = document.getElementById('card-items-section');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  if (itemsCollapsedSummary) {
+    itemsCollapsedSummary.addEventListener('click', () => {
+      setItemsSectionCollapsed(false);
+    });
+  }
+
   // Add Item Button (Positioned directly below the last item card)
   const btnAddItem = document.getElementById('btn-add-item');
   if (btnAddItem) {
     btnAddItem.addEventListener('click', () => {
       if (!window.currentInvoice) return;
+      if (window.isItemsSectionCollapsed) {
+        setItemsSectionCollapsed(false);
+      }
       window.currentInvoice.items.push({
         id: Date.now(),
         name: '',
@@ -1111,6 +1184,7 @@ function setupEventListeners() {
       });
       if (ok) {
         window.currentInvoice = StorageService.getBlankInvoice();
+        setItemsSectionCollapsed(false);
         populateFormFromState();
         if (typeof renderSavedBanksCheckboxes === 'function') renderSavedBanksCheckboxes();
         const selClient = document.getElementById('select-saved-client');
@@ -1246,6 +1320,8 @@ window.populateFormFromState = populateFormFromState;
 window.renderFormItems = renderFormItems;
 window.renderFormBanks = renderFormBanks;
 window.bindInput = bindInput;
+window.updateItemsSectionSummary = updateItemsSectionSummary;
+window.setItemsSectionCollapsed = setItemsSectionCollapsed;
 window.initViewNavigation = initViewNavigation;
 window.switchView = switchView;
 window.initSignaturePad = initSignaturePad;

@@ -16,6 +16,8 @@ const KNOWN_CATALOG_UNITS = new Set([
 ]);
 
 let pendingImportProducts = [];
+let catalogCurrentPage = 1;
+let catalogPageSize = 10;
 
 // Helper to classify Excel header accurately without cross-matching bugs
 function classifyCatalogColumn(rawKey) {
@@ -324,6 +326,7 @@ function confirmImportCatalog() {
     const fileInp = document.getElementById('catalog-excel-file-input');
     if (fileInp) fileInp.value = '';
 
+    catalogCurrentPage = 1;
     renderCatalogTableView();
     updateCatalogBadge();
     if (typeof renderProductDatalist === 'function') renderProductDatalist();
@@ -365,14 +368,93 @@ function updateCatalogBadge() {
   if (badge3) badge3.textContent = `${count} barang`;
 }
 
-function renderCatalogTableView(searchTerm = '') {
+function getCatalogPaginationSequence(current, total) {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, idx) => idx + 1);
+  }
+  const pages = [1];
+  const left = Math.max(2, current - 1);
+  const right = Math.min(total - 1, current + 1);
+  if (left > 2) pages.push('...');
+  for (let p = left; p <= right; p++) pages.push(p);
+  if (right < total - 1) pages.push('...');
+  pages.push(total);
+  return pages;
+}
+
+function renderCatalogPagination(totalItems, totalPages, startIndex, endIndex, activeSearch) {
+  const infoEl = document.getElementById('catalog-pagination-info');
+  const controlsEl = document.getElementById('catalog-pagination-controls');
+
+  if (infoEl) {
+    infoEl.textContent = totalItems === 0
+      ? 'Menampilkan 0 barang'
+      : `Menampilkan ${startIndex + 1}–${endIndex} dari ${totalItems} barang`;
+  }
+
+  if (!controlsEl) return;
+  controlsEl.innerHTML = '';
+
+  if (totalItems === 0) return;
+
+  const createPageBtn = (label, targetPage, { disabled = false, active = false, title = '' } = {}) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    if (title) btn.title = title;
+    btn.disabled = disabled;
+
+    if (active) {
+      btn.className = 'min-w-[28px] h-7 px-2 rounded-lg border border-blue-600 bg-blue-600 text-white font-bold text-[11px] shadow-sm cursor-default';
+    } else if (disabled) {
+      btn.className = 'h-7 px-2.5 rounded-lg border border-slate-200 bg-slate-100 text-slate-400 font-semibold text-[11px] cursor-not-allowed';
+    } else {
+      btn.className = 'min-w-[28px] h-7 px-2.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-semibold text-[11px] transition cursor-pointer';
+      btn.addEventListener('click', () => {
+        catalogCurrentPage = targetPage;
+        renderCatalogTableView(activeSearch);
+      });
+    }
+    return btn;
+  };
+
+  controlsEl.appendChild(createPageBtn('← Sebelumnya', catalogCurrentPage - 1, {
+    disabled: catalogCurrentPage <= 1,
+    title: 'Halaman sebelumnya'
+  }));
+
+  getCatalogPaginationSequence(catalogCurrentPage, totalPages).forEach(entry => {
+    if (entry === '...') {
+      const span = document.createElement('span');
+      span.className = 'px-1.5 text-slate-400 text-[11px] select-none';
+      span.textContent = '…';
+      controlsEl.appendChild(span);
+    } else {
+      controlsEl.appendChild(createPageBtn(String(entry), entry, {
+        active: entry === catalogCurrentPage,
+        title: `Halaman ${entry}`
+      }));
+    }
+  });
+
+  controlsEl.appendChild(createPageBtn('Berikutnya →', catalogCurrentPage + 1, {
+    disabled: catalogCurrentPage >= totalPages,
+    title: 'Halaman berikutnya'
+  }));
+}
+
+function renderCatalogTableView(searchTerm = null) {
   const tbody = document.getElementById('catalog-table-body');
   if (!tbody) return;
   tbody.innerHTML = '';
 
+  const activeSearch = typeof searchTerm === 'string'
+    ? searchTerm
+    : (document.getElementById('catalog-search-input')?.value || '');
+
   let list = StorageService.getProducts();
-  if (searchTerm) {
-    const q = searchTerm.toLowerCase();
+  if (activeSearch) {
+    const q = activeSearch.toLowerCase();
     list = list.filter(p =>
       (p.name || '').toLowerCase().includes(q) ||
       (p.description || '').toLowerCase().includes(q)
@@ -381,26 +463,41 @@ function renderCatalogTableView(searchTerm = '') {
 
   updateCatalogBadge();
 
+  if (activeSearch.trim()) {
+    const tableCountEl = document.getElementById('catalog-table-count');
+    if (tableCountEl) tableCountEl.textContent = `${list.length} hasil`;
+  }
+
   if (list.length === 0) {
+    catalogCurrentPage = 1;
     tbody.innerHTML = `
       <tr>
         <td colspan="6" class="text-center py-12 text-slate-400 italic">
           <div class="flex flex-col items-center gap-2">
             <span class="text-3xl">📦</span>
-            <span class="font-semibold text-slate-600">Belum ada barang di katalog.</span>
-            <span class="text-xs">Gunakan formulir di sebelah kiri untuk menambahkan master barang & harga jual Anda.</span>
+            <span class="font-semibold text-slate-600">${activeSearch.trim() ? 'Barang tidak ditemukan.' : 'Belum ada barang di katalog.'}</span>
+            <span class="text-xs">${activeSearch.trim() ? 'Coba ubah kata kunci pencarian Anda.' : 'Gunakan formulir di sebelah kiri untuk menambahkan master barang & harga jual Anda.'}</span>
           </div>
         </td>
       </tr>
     `;
+    renderCatalogPagination(0, 1, 0, 0, activeSearch);
     return;
   }
 
-  list.forEach((p, idx) => {
+  const totalItems = list.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / catalogPageSize));
+  catalogCurrentPage = Math.min(Math.max(1, catalogCurrentPage), totalPages);
+  const startIndex = (catalogCurrentPage - 1) * catalogPageSize;
+  const endIndex = Math.min(startIndex + catalogPageSize, totalItems);
+  const pageItems = list.slice(startIndex, endIndex);
+
+  pageItems.forEach((p, idx) => {
+    const rowNumber = startIndex + idx + 1;
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-slate-50/80 transition';
     tr.innerHTML = `
-      <td class="py-3 px-3.5 text-center font-medium text-slate-500">${idx + 1}</td>
+      <td class="py-3 px-3.5 text-center font-medium text-slate-500">${rowNumber}</td>
       <td class="py-3 px-3.5">
         <div class="font-bold text-slate-800 text-xs">${escapeHtml(p.name)}</div>
       </td>
@@ -458,7 +555,7 @@ function renderCatalogTableView(searchTerm = '') {
       });
       if (ok) {
         StorageService.deleteProduct(p.id);
-        renderCatalogTableView(searchTerm);
+        renderCatalogTableView(activeSearch);
         if (typeof renderProductDatalist === 'function') renderProductDatalist();
         showToast('Barang berhasil dihapus dari katalog');
       }
@@ -466,12 +563,15 @@ function renderCatalogTableView(searchTerm = '') {
 
     tbody.appendChild(tr);
   });
+
+  renderCatalogPagination(totalItems, totalPages, startIndex, endIndex, activeSearch);
 }
 
 function setupCatalogViewEvents() {
   const btnSave = document.getElementById('btn-save-catalog-item');
   const btnCancel = document.getElementById('btn-cancel-edit-catalog');
   const searchInput = document.getElementById('catalog-search-input');
+  const pageSizeSelect = document.getElementById('catalog-page-size');
   const catPriceInput = document.getElementById('catalog-input-price');
 
   if (catPriceInput) {
@@ -492,13 +592,27 @@ function setupCatalogViewEvents() {
         return;
       }
 
-      StorageService.saveProduct({
+      const saved = StorageService.saveProduct({
         id: editId || undefined,
         name: name,
         description: desc,
         unit: unit,
         price: price
       });
+
+      if (saved) {
+        const activeQ = (searchInput?.value || '').toLowerCase();
+        const filtered = activeQ
+          ? StorageService.getProducts().filter(p =>
+              (p.name || '').toLowerCase().includes(activeQ) ||
+              (p.description || '').toLowerCase().includes(activeQ)
+            )
+          : StorageService.getProducts();
+        const savedIdx = filtered.findIndex(p => p.id === saved.id);
+        if (savedIdx >= 0) {
+          catalogCurrentPage = Math.floor(savedIdx / catalogPageSize) + 1;
+        }
+      }
 
       resetCatalogForm();
       renderCatalogTableView();
@@ -513,7 +627,17 @@ function setupCatalogViewEvents() {
 
   if (searchInput) {
     searchInput.addEventListener('input', () => {
+      catalogCurrentPage = 1;
       renderCatalogTableView(searchInput.value);
+    });
+  }
+
+  if (pageSizeSelect) {
+    pageSizeSelect.value = String(catalogPageSize);
+    pageSizeSelect.addEventListener('change', (e) => {
+      catalogPageSize = parseInt(e.target.value, 10) || 10;
+      catalogCurrentPage = 1;
+      renderCatalogTableView();
     });
   }
 

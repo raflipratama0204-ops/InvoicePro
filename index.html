@@ -330,31 +330,54 @@
       </div>
 
       <!-- Card 3: Daftar Item Barang / Jasa -->
-      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 flex-wrap gap-2">
-          <div>
-            <h2 class="form-section-title mb-0 border-b-0 pb-0">
-              <span>📦</span> Rincian Barang / Jasa
-            </h2>
-            <p class="text-[11px] text-slate-400 mt-0.5">Ketik nama barang, pilihan dari katalog akan otomatis muncul untuk langsung diklik.</p>
-          </div>
-          <div class="flex items-center gap-2">
+      <div id="card-items-section" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+          <button type="button" id="btn-toggle-items-header" class="flex-1 min-w-0 text-left flex items-start gap-2 group cursor-pointer focus:outline-none" title="Klik untuk buka/tutup daftar rincian barang">
+            <span id="items-toggle-chevron" class="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-md bg-slate-100 group-hover:bg-blue-50 text-slate-600 group-hover:text-blue-600 text-[10px] font-bold transition-transform duration-200 shrink-0">▼</span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="form-section-title mb-0 border-b-0 pb-0">
+                  <span>📦</span> Rincian Barang / Jasa
+                </h2>
+                <span id="items-section-count-badge" class="text-[10.5px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">1 Item</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5">Ketik nama barang, pilihan dari katalog akan otomatis muncul untuk langsung diklik.</p>
+            </div>
+          </button>
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" id="btn-toggle-items-section" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition flex items-center gap-1 cursor-pointer" title="Lipat atau buka daftar rincian barang">
+              <span id="items-toggle-label">Lipat</span>
+            </button>
             <button type="button" id="btn-goto-catalog" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition flex items-center gap-1.5" title="Buka menu Katalog Barang untuk menginput atau mengelola master harga jual">
               <span>📦</span> Kelola Katalog
             </button>
           </div>
         </div>
 
-        <div id="items-container">
-          <!-- Item rows rendered dynamically by app.js with rich autocomplete dropdown -->
+        <!-- Ringkasan singkat saat daftar barang dilipat -->
+        <div id="items-collapsed-summary" class="hidden mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between gap-2 text-xs cursor-pointer hover:bg-slate-100/80 transition" title="Klik untuk membuka kembali daftar rincian barang">
+          <div class="flex items-center gap-2 text-slate-600 min-w-0">
+            <span>📋</span>
+            <span id="items-collapsed-summary-text" class="truncate font-medium">1 barang/jasa · Subtotal Rp 0</span>
+          </div>
+          <span class="text-blue-600 font-bold shrink-0 whitespace-nowrap">Buka Daftar ▼</span>
         </div>
 
-        <!-- Tombol Tambah Baris: Diletakkan persis di bawah card item terakhir -->
-        <div class="mt-3 pt-2">
-          <button type="button" id="btn-add-item" class="w-full py-2 px-3 text-xs font-semibold rounded-lg border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/60 hover:bg-blue-100/80 text-blue-700 transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99] whitespace-nowrap">
-            <span class="text-sm font-bold leading-none">+</span>
-            <span>Tambah Baris</span>
-          </button>
+        <div id="items-section-body" class="mt-3">
+          <div id="items-container">
+            <!-- Item rows rendered dynamically by app.js with rich autocomplete dropdown -->
+          </div>
+
+          <!-- Tombol Tambah Baris & Lipat Daftar -->
+          <div class="mt-3 pt-2 flex items-center gap-2">
+            <button type="button" id="btn-add-item" class="flex-1 py-2 px-3 text-xs font-semibold rounded-lg border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/60 hover:bg-blue-100/80 text-blue-700 transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99] whitespace-nowrap">
+              <span class="text-sm font-bold leading-none">+</span>
+              <span>Tambah Baris</span>
+            </button>
+            <button type="button" id="btn-collapse-items-bottom" class="py-2 px-3 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition flex items-center gap-1 cursor-pointer whitespace-nowrap" title="Lipat daftar barang agar lebih cepat mengisi bagian di bawahnya">
+              <span>▲</span> Lipat
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1001,6 +1024,25 @@
               </table>
             </div>
 
+            <!-- Pagination Footer -->
+            <div id="catalog-pagination-bar" class="px-4 py-3 bg-slate-50/70 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+              <div class="flex items-center gap-3 flex-wrap">
+                <span id="catalog-pagination-info" class="text-slate-500 font-medium">Menampilkan 0 barang</span>
+                <label class="flex items-center gap-1.5 text-[11px] text-slate-500">
+                  <span>Per halaman:</span>
+                  <select id="catalog-page-size" class="border border-slate-300 rounded-md px-2 py-1 text-[11px] font-semibold bg-white text-slate-700 cursor-pointer focus:outline-none focus:border-blue-500">
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                </label>
+              </div>
+              <div id="catalog-pagination-controls" class="flex items-center gap-1 flex-wrap">
+                <!-- Populated dynamically by catalog.js -->
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -1451,14 +1493,14 @@
   <script src="js/modules/formatters.js?v=1.0.5"></script>
   <script src="js/modules/dialogs.js?v=1.0.5"></script>
   <script src="js/modules/preview.js?v=1.0.6"></script>
-  <script src="js/modules/catalog.js?v=1.0.5"></script>
+  <script src="js/modules/catalog.js?v=1.0.7"></script>
   <script src="js/modules/sales.js?v=1.0.5"></script>
   <script src="js/modules/master-data.js?v=1.0.5"></script>
   <script src="js/modules/updater.js?v=1.0.5"></script>
   <script src="js/modules/firebase-sync.js?v=1.0.5"></script>
 
   <!-- Core App Controller & Lifecycle -->
-  <script src="js/app.js?v=1.0.5"></script>
+  <script src="js/app.js?v=1.0.8"></script>
 
 </body>
 </html>
